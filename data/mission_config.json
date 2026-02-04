@@ -1,16 +1,32 @@
 {
+
     "satellite_id": "DISHA-SAT-01",
+
     "orbit": {
+
         "epoch": "2025-02-04T12:00:00Z",
+
         "position_km": [7000.0, 0.0, 0.0],
+
         "velocity_km_s": [0.0, 7.5, 0.0],
+
         "frame": "ECI"
+
     },
+
     "power_system": {
+
         "max_battery_capacity_wh": 500.0,
+
         "min_safe_battery_level_pct": 20.0
+
     },
+
     "data_system": {
+
         "max_storage_gb": 1024.0
+
     }
+
 }
+ 
