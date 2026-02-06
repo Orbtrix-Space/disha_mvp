@@ -78,3 +78,4 @@ def check_feasibility(request, mission_state):
         "is_feasible": is_feasible,
         "windows": access_windows
     }
+
