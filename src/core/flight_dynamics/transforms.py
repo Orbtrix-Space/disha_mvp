@@ -109,4 +109,36 @@ def ecef_to_lla(r_ecef: np.array) -> dict:
         "alt_km": ellipsoidal_height
 
     }
+
+def lla_to_ecef(lat_deg: float, lon_deg: float, alt_km: float) -> np.array:
+
+    """
+
+    Converts Latitude, Longitude, Altitude to Earth-Fixed X, Y, Z.
+
+    Used to find where the Ground Station is in 3D space.
+
+    """
+
+    lat_rad = np.radians(lat_deg)
+
+    lon_rad = np.radians(lon_deg)
+
+    a = 6378.137  # Earth Radius
+
+    f = 1.0 / 298.257223563
+
+    e2 = f * (2.0 - f)
+
+    # Radius of curvature in the prime vertical
+
+    N = a / np.sqrt(1.0 - e2 * np.sin(lat_rad)**2)
+
+    x = (N + alt_km) * np.cos(lat_rad) * np.cos(lon_rad)
+
+    y = (N + alt_km) * np.cos(lat_rad) * np.sin(lon_rad)
+
+    z = (N * (1.0 - e2) + alt_km) * np.sin(lat_rad)
+
+    return np.array([x, y, z])
  
