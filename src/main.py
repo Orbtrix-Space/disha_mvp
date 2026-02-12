@@ -1,75 +1,72 @@
-from datetime import datetime, timedelta
-from src.models.schemas import UserRequest
 from src.core.state_manager import MissionState
 from src.core.flight_dynamics import check_feasibility
-from src.core.mission_planner import create_plan
+from src.core.mission_planner import generate_mission_plan
 from src.core.decision_manager import validate_plan
+from src.utils.scenario import generate_scenarios
 
-def run_disha_mission():
+def run_disha_scheduler_demo():
     print("==========================================")
-    print("      DISHA-SAT-01 MISSION CONTROL        ")
+    print("      DISHA-SAT MISSION PLANNING SYSTEM   ")
     print("==========================================")
 
     # ---------------------------------------------------------
-    # STEP 1: Receive User Request
+    # STEP 1: Generate Random Scenarios (The "Users")
     # ---------------------------------------------------------
-    request = UserRequest(
-        request_id="REQ-BLR-001",
-        target_lat=12.9716,
-        target_lon=77.5946,  # Bangalore
-        priority=5,
-        window_start=datetime.now(),
-        window_end=datetime.now() + timedelta(hours=24),
-        min_duration_sec=60
-    )
-    print(f"\n[STEP 1] Received Request: {request.request_id} for Target ({request.target_lat}, {request.target_lon})")
-
+    # Create 10 random requests to test the scheduler
+    requests = generate_scenarios(n=10)
+    
     # ---------------------------------------------------------
     # STEP 2: Load Satellite State
     # ---------------------------------------------------------
-    # The Systems Engineer's code wakes up here
     satellite = MissionState()
-    current_health = satellite.get_state()
-    print(f"[STEP 2] Satellite Status: Battery={current_health['battery_pct']}% | Storage Used={current_health['storage_gb']}GB")
+    print(f"\n[SYSTEM] Satellite Battery: {satellite.get_state()['battery_pct']}%")
 
     # ---------------------------------------------------------
-    # STEP 3: Check Feasibility (Flight Dynamics)
+    # STEP 3: Pre-Check Feasibility (Physics)
     # ---------------------------------------------------------
-    # Your dummy FD code runs here
-    fd_result = check_feasibility(request, satellite)
+    # We check if the satellite physically passes over these cities.
+    valid_requests = []
     
-    if not fd_result["is_feasible"]:
-        print("[STEP 3] FAILED: Target not visible.")
-        return
-
-    print(f"[STEP 3] SUCCESS: Found {len(fd_result['windows'])} pass(es).")
-
-    # ---------------------------------------------------------
-    # STEP 4: Generate Mission Plan (Planner)
-    # ---------------------------------------------------------
-    # The Junior's code runs here
-    plan = create_plan(request, fd_result["windows"])
+    print(f"\n[PHYSICS] Checking visibility for {len(requests)} requests...")
     
-    if not plan.is_feasible:
-        print(f"[STEP 4] FAILED: Planner could not schedule. Reason: {plan.reason}")
-        return
+    for req in requests:
+        # Run J2 Propagator (Week 2 Code)
+        fd_result = check_feasibility(req, satellite)
+        
+        if fd_result["is_feasible"]:
+            # Store the windows so the Scheduler knows WHEN to schedule
+            req.feasible_windows = fd_result["windows"]
+            valid_requests.append(req)
+        else:
+            print(f"   > {req.request_id}: NOT VISIBLE (Discarded)")
 
-    print(f"[STEP 4] SUCCESS: Generated Plan with {len(plan.schedule)} task(s).")
-    print(f"         > Action: {plan.schedule[0].action}")
-    print(f"         > Start : {plan.schedule[0].start_time}")
+    print(f"\n[PHYSICS] {len(valid_requests)} requests have valid access windows.")
 
     # ---------------------------------------------------------
-    # STEP 5: Final Safety Check (Decision Manager)
+    # STEP 4: Run the Planner (The "Brain")
     # ---------------------------------------------------------
-    # The Safety Logic runs here
-    final_decision = validate_plan(plan, satellite)
+    # This calls your new logic in mission_planner.py
+    # It sorts by Priority and resolves time conflicts
+    mission_plan = generate_mission_plan(valid_requests)
 
-    print("\n------------------------------------------")
+    # ---------------------------------------------------------
+    # STEP 5: Final Safety Check (Battery)
+    # ---------------------------------------------------------
+    final_decision = validate_plan(mission_plan, satellite)
+
+    print("\n==========================================")
+    print("             FINAL MANIFEST               ")
+    print("==========================================")
+    
     if final_decision["status"] == "APPROVED":
-        print(f"✅ MISSION STATUS: GREEN. EXECUTION AUTHORIZED.")
+        for task in mission_plan.schedule:
+            # Format time nicely
+            start_str = task.start_time.strftime('%H:%M:%S')
+            print(f"[{start_str}] {task.task_id} | Cost: {task.power_cost_wh:.1f}Wh")
+        print(f"\n✅ MISSION STATUS: GREEN. READY FOR UPLINK.")
     else:
-        print(f"❌ MISSION STATUS: RED. ABORTED. Reason: {final_decision['reason']}")
-    print("------------------------------------------")
+        print(f"❌ MISSION ABORTED. Reason: {final_decision['reason']}")
+    print("==========================================")
 
 if __name__ == "__main__":
-    run_disha_mission()
+    run_disha_scheduler_demo()
