@@ -90,6 +90,26 @@ def api_generate_plan(payload: ScheduleRequest):
     return {
         "status": "SUCCESS",
         "scheduled_tasks": len(mission_plan.schedule),
+        "total_requests": len(payload.requests),
+        "feasible_requests": len(valid_requests),
         "satellite_health": satellite.get_state(),
-        "plan_details": mission_plan.schedule
+        "plan_details": [
+            {
+                "task_id": t.task_id,
+                "action": t.action,
+                "start_time": t.start_time.isoformat(),
+                "end_time": t.end_time.isoformat(),
+                "power_cost_wh": round(t.power_cost_wh, 2),
+                "data_cost_gb": round(t.data_cost_gb, 2),
+            }
+            for t in mission_plan.schedule
+        ],
     }
+
+
+@app.post("/reset")
+def reset_satellite():
+    """Resets satellite to initial state."""
+    global satellite
+    satellite = MissionState()
+    return {"status": "RESET", "satellite_health": satellite.get_state()}

@@ -1,60 +1,62 @@
 import numpy as np
 from datetime import datetime
+from src.core.flight_dynamics import propagate_orbit
 
 class MissionState:
+    MAX_BATTERY_WH = 500.0
+    MAX_STORAGE_GB = 1024.0
+
     def __init__(self):
-        # ==========================================
-        # 1. ORBITAL STATE (Physics) - From Week 2
-        # ==========================================
-        # We initialize with a dummy state for a Low Earth Orbit (LEO)
-        # Position (km), Velocity (km/s) in ECI Frame
-        self.position = np.array([7000.0, 0.0, 0.0]) 
-        self.velocity = np.array([0.0, 7.5, 0.0])    
+        # Initialize with raw numpy arrays
+        self.position = np.array([7000.0, 0.0, 0.0])
+        self.velocity = np.array([0.0, 7.5, 0.0])
+        self.last_updated = datetime.now()
         self.current_time = datetime.now()
 
-        # ==========================================
-        # 2. RESOURCE STATE (Systems) - From Week 4
-        # ==========================================
-        self.battery_capacity_wh = 100.0  # Total Battery Size
-        self.current_battery_wh = 100.0   # Current Charge
-        self.data_storage_max_gb = 100.0  # Total Storage Size
-        self.current_storage_used_gb = 0.0 # Current Data Used
-        self.last_updated = datetime.now()
+        # Resources
+        self.current_battery_wh = self.MAX_BATTERY_WH
+        self.current_storage_used_gb = 0.0
 
     def get_state(self):
         """
-        Returns the complete status of the satellite.
+        Calculates the NEW position based on time elapsed.
         """
-        # Calculate percentages
-        battery_pct = (self.current_battery_wh / self.battery_capacity_wh) * 100.0
-        storage_pct = (self.current_storage_used_gb / self.data_storage_max_gb) * 100.0
-        
+        now = datetime.now()
+        dt = (now - self.last_updated).total_seconds()
+
+        if dt > 0:
+            initial_state_dict = {
+                'position': self.position,
+                'velocity': self.velocity,
+                'epoch': self.current_time
+            }
+
+            result = propagate_orbit(initial_state_dict, dt)
+
+            # result is a list of dicts; grab the last entry
+            if isinstance(result, list) and len(result) > 0:
+                last = result[-1]["eci_state"]
+                self.position = np.array(last[:3])
+                self.velocity = np.array(last[3:])
+            else:
+                self.position = np.array(result[0])
+                self.velocity = np.array(result[1])
+
+            self.last_updated = now
+            self.current_time = now
+
         return {
-            "timestamp": self.last_updated,
-            # Physics Info
-            "position": self.position.tolist(), # Convert numpy to list for JSON
+            "timestamp": self.last_updated.isoformat(),
+            "position": self.position.tolist(),
             "velocity": self.velocity.tolist(),
-            # System Info
-            "battery_pct": round(battery_pct, 2),
-            "storage_pct": round(storage_pct, 2),
-            "critical_warning": battery_pct < 20.0
+            "battery_wh": round(self.current_battery_wh, 2),
+            "battery_pct": round((self.current_battery_wh / self.MAX_BATTERY_WH) * 100, 2),
+            "storage_used_gb": round(self.current_storage_used_gb, 2),
+            "storage_pct": round((self.current_storage_used_gb / self.MAX_STORAGE_GB) * 100, 2),
+            "max_battery_wh": self.MAX_BATTERY_WH,
+            "max_storage_gb": self.MAX_STORAGE_GB,
         }
 
-    def update_state(self, power_cost_wh: float, data_cost_gb: float):
-        """
-        Updates the satellite resources (Drains battery, Fills storage).
-        """
-        # 1. Drain Battery
-        self.current_battery_wh -= power_cost_wh
-        if self.current_battery_wh < 0:
-            self.current_battery_wh = 0 # Cannot go below 0
-            
-        # 2. Fill Storage
-        self.current_storage_used_gb += data_cost_gb
-        if self.current_storage_used_gb > self.data_storage_max_gb:
-            self.current_storage_used_gb = self.data_storage_max_gb # Cannot overfill
-            
-        # 3. Update Timestamp
-        self.last_updated = datetime.now()
-        
-        print(f"[SYSTEM] State Updated: Battery {self.current_battery_wh:.1f}Wh, Storage {self.current_storage_used_gb:.1f}GB")
+    def update_state(self, power_cost_wh, data_cost_gb):
+        self.current_battery_wh = max(0, self.current_battery_wh - power_cost_wh)
+        self.current_storage_used_gb = min(self.MAX_STORAGE_GB, self.current_storage_used_gb + data_cost_gb)
