@@ -1,35 +1,32 @@
-from dataclasses import dataclass
+from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import List, Optional
 
-# 1. The Request (What comes IN)
-@dataclass
-class UserRequest: 
+# 1. User Request (What comes IN)
+class UserRequest(BaseModel):
     request_id: str
     target_lat: float
     target_lon: float
-    priority: int           # 1 (Low) to 10 (Critical)
-    
-    # --- ADDED THESE TWO FIELDS ---
-    window_start: datetime  # "Don't look before this time"
-    window_end: datetime    # "Must be done by this time"
-    # ------------------------------
+    priority: int
+    window_start: datetime
+    window_end: datetime
+    min_duration_sec: int = 60
+    # Optional: We add this later during processing, so it defaults to None
+    feasible_windows: Optional[List[tuple]] = None 
 
-    min_duration_sec: int = 60  
-
-# 2. The Plan (What goes OUT)
-@dataclass
-class Task:
+# 2. Task (What goes into the Schedule)
+class Task(BaseModel):
     task_id: str
-    action: str             # "IMAGING", "DOWNLINK", "SLEW"
+    action: str  # e.g., "IMAGING", "DOWNLINK"
     start_time: datetime
     end_time: datetime
-    power_cost_wh: float
-    data_cost_gb: float 
+    # --- NEW FIELDS FOR WEEK 3/4 ---
+    power_cost_wh: float = 0.0  # Default to 0 if not specified
+    data_cost_gb: float = 0.0   # Default to 0 if not specified
 
-@dataclass
-class MissionPlan:
+# 3. Mission Plan (The Final Output)
+class MissionPlan(BaseModel):
     request_id: str
     is_feasible: bool
-    reason: str             # "SUCCESS" or "ERR_BATTERY_LOW"
+    reason: str
     schedule: List[Task]
