@@ -1,39 +1,74 @@
-from datetime import datetime, timedelta
-from src.models.schemas import UserRequest, MissionPlan, Task
- 
-def create_plan(request: UserRequest, visibility_windows: list) -> MissionPlan:
+from src.models.schemas import MissionPlan, Task
+from src.models.resources import calculate_energy_cost, calculate_data_volume
+# We import the rules from the file you just made
+from src.core.scheduler.constraints import check_temporal_overlap
+
+def generate_mission_plan(requests) -> MissionPlan:
     """
-    WEEK 1 STUB: Generates a DUMMY plan.
-    It does NOT check for conflicts. It just assumes the first window is good.
+    The 'Greedy' Scheduler Algorithm.
+    Task: Update src/core/mission_planner.py (Week 3 Task 4)
+    Logic: Sort by Priority -> Find First Gap -> Schedule
     """
-    print(f"[PLANNER] Generating plan for Request ID: {request.request_id}...")
- 
-    # 1. Safety Check: If Flight Dynamics said "No Windows", fail immediately.
-    if not visibility_windows:
-        return MissionPlan(
-            request_id=request.request_id,
-            is_feasible=False,
-            reason="No visibility windows found",
-            schedule=[]
+    print(f"[PLANNER] Processing {len(requests)} requests...")
+    
+    # 1. Sort Requests (Highest Priority First)
+    # Critical tasks (10) get first dibs on the timeline.
+    sorted_requests = sorted(requests, key=lambda x: x.priority, reverse=True)
+    
+    scheduled_tasks = []
+    rejected_count = 0
+    
+    for req in sorted_requests:
+        # Check if Physics found a valid window
+        if not hasattr(req, 'feasible_windows') or not req.feasible_windows:
+            print(f"   [X] REJECTED: {req.request_id} (No Access Window)")
+            rejected_count += 1
+            continue
+
+        # STRATEGY: Find First Gap (Greedy)
+        # We look at all valid windows and pick the first one that doesn't conflict.
+        selected_window = None
+        
+        for window in req.feasible_windows:
+            start_t, end_t = window
+            
+            # Check Rule: Does this specific window overlap with existing plan?
+            if not check_temporal_overlap(start_t, end_t, scheduled_tasks):
+                selected_window = window
+                break # Found a gap! Stop looking.
+        
+        # If no gap was found after checking all windows
+        if selected_window is None:
+            print(f"   [X] REJECTED: {req.request_id} (Conflict - No gap found)")
+            rejected_count += 1
+            continue
+
+        # 2. Calculate Costs
+        start_time, end_time = selected_window
+        duration = (end_time - start_time).total_seconds()
+        
+        power_cost = calculate_energy_cost("IMAGING", duration)
+        data_cost = calculate_data_volume(duration)
+
+        # 3. Create Task & Add to Schedule
+        new_task = Task(
+            task_id=f"TASK-{req.request_id}",
+            action="IMAGING",
+            start_time=start_time,
+            end_time=end_time,
+            power_cost_wh=power_cost, 
+            data_cost_gb=data_cost   
         )
- 
-    # 2. Logic: Just pick the FIRST window available (DUMMY LOGIC)
-    # In Week 3, we will write real scheduling logic here.
-    first_window_start, first_window_end = visibility_windows[0]
-    # Create a Task object (using the Schema we agreed on)
-    imaging_task = Task(
-        task_id=f"TASK-{request.request_id}-01",
-        action="IMAGING",
-        start_time=first_window_start,
-        end_time=first_window_end,
-        power_cost_wh=5.0,  # Fake cost
-        data_cost_gb=0.5    # Fake cost
-    )
- 
-    # 3. Return the Final Plan
-    return MissionPlan(
-        request_id=request.request_id,
+        scheduled_tasks.append(new_task)
+        print(f"   [V] SCHEDULED: {req.request_id} (Priority {req.priority})")
+
+    # 4. Wrap it in a MissionPlan object
+    plan = MissionPlan(
+        request_id="MASTER-PLAN-001",
         is_feasible=True,
-        reason="SUCCESS: Scheduled in first available window",
-        schedule=[imaging_task]
+        reason=f"Scheduled {len(scheduled_tasks)}/{len(requests)} requests",
+        schedule=scheduled_tasks
     )
+        
+    print(f"[PLANNER] Final Plan: {len(scheduled_tasks)} Accepted, {rejected_count} Rejected.")
+    return plan
