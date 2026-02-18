@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Send,
   Plus,
@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Target,
   Rocket,
+  Radio,
 } from 'lucide-react';
 import { api } from '../services/api';
 
@@ -40,6 +41,13 @@ export default function MissionPlanner() {
   const [priority, setPriority] = useState(5);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [contactPasses, setContactPasses] = useState([]);
+
+  useEffect(() => {
+    api.getGroundStationPasses().then((data) => {
+      if (data && data.passes) setContactPasses(data.passes.slice(0, 8));
+    });
+  }, []);
 
   const addTarget = () => {
     const latVal = parseFloat(lat);
@@ -275,6 +283,35 @@ export default function MissionPlanner() {
             <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
               Calculating visibility windows and scheduling
             </div>
+          </div>
+        )}
+
+        {/* Contact Schedule */}
+        {!result && !loading && contactPasses.length > 0 && (
+          <div style={{ padding: 16 }}>
+            <div className="section-title" style={{ marginBottom: 12 }}>
+              <Radio size={14} /> Upcoming Contacts
+            </div>
+            <table className="pass-table" style={{ width: '100%' }}>
+              <thead>
+                <tr>
+                  <th>Station</th>
+                  <th>AOS</th>
+                  <th>LOS</th>
+                  <th>Duration</th>
+                </tr>
+              </thead>
+              <tbody>
+                {contactPasses.map((p, i) => (
+                  <tr key={i}>
+                    <td>{p.station_name}</td>
+                    <td>{p.aos_time ? new Date(p.aos_time).toISOString().slice(11, 16) + ' UTC' : '--'}</td>
+                    <td>{p.los_time ? new Date(p.los_time).toISOString().slice(11, 16) + ' UTC' : '--'}</td>
+                    <td>{Math.floor(p.duration_sec / 60)}m {Math.round(p.duration_sec % 60)}s</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
 

@@ -1,5 +1,4 @@
-import { Activity, Battery, Database, Navigation, Gauge } from 'lucide-react';
-import { eciToGeodetic } from './SatelliteMap';
+import { Activity, Battery, Database, Navigation, Gauge, Thermometer, Zap } from 'lucide-react';
 
 function ProgressBar({ value, colorClass }) {
   return (
@@ -18,8 +17,8 @@ function getBatteryColor(pct) {
   return 'red';
 }
 
-export default function Telemetry({ status }) {
-  if (!status) {
+export default function Telemetry({ telemetry }) {
+  if (!telemetry) {
     return (
       <div className="sidebar">
         <div className="sidebar-section">
@@ -35,21 +34,7 @@ export default function Telemetry({ status }) {
     );
   }
 
-  const batteryColor = getBatteryColor(status.battery_pct);
-  const speed = Math.sqrt(
-    status.velocity[0] ** 2 + status.velocity[1] ** 2 + status.velocity[2] ** 2
-  );
-  const altitude =
-    Math.sqrt(
-      status.position[0] ** 2 +
-        status.position[1] ** 2 +
-        status.position[2] ** 2
-    ) - 6378.137;
-  const [lat, lon] = eciToGeodetic(
-    status.position[0],
-    status.position[1],
-    status.position[2]
-  );
+  const batteryColor = getBatteryColor(telemetry.battery_pct);
 
   return (
     <div className="sidebar">
@@ -64,10 +49,10 @@ export default function Telemetry({ status }) {
           <div className="telem-card full-width">
             <div className="telem-label">Battery Level</div>
             <div className={`telem-value ${batteryColor}`}>
-              {status.battery_pct}
+              {telemetry.battery_pct}
               <span className="telem-unit">%</span>
             </div>
-            <ProgressBar value={status.battery_pct} colorClass={batteryColor} />
+            <ProgressBar value={telemetry.battery_pct} colorClass={batteryColor} />
             <div
               style={{
                 marginTop: 6,
@@ -76,7 +61,7 @@ export default function Telemetry({ status }) {
                 color: 'var(--text-muted)',
               }}
             >
-              {status.battery_wh} / {status.max_battery_wh} Wh
+              {telemetry.battery_wh} / {telemetry.max_battery_wh} Wh
             </div>
           </div>
         </div>
@@ -93,10 +78,10 @@ export default function Telemetry({ status }) {
           <div className="telem-card full-width">
             <div className="telem-label">Storage Used</div>
             <div className="telem-value cyan">
-              {status.storage_pct}
+              {telemetry.storage_pct}
               <span className="telem-unit">%</span>
             </div>
-            <ProgressBar value={status.storage_pct} colorClass="blue" />
+            <ProgressBar value={telemetry.storage_pct} colorClass="blue" />
             <div
               style={{
                 marginTop: 6,
@@ -105,7 +90,7 @@ export default function Telemetry({ status }) {
                 color: 'var(--text-muted)',
               }}
             >
-              {status.storage_used_gb} / {status.max_storage_gb} GB
+              {telemetry.storage_used_gb} / {telemetry.max_storage_gb} GB
             </div>
           </div>
         </div>
@@ -122,33 +107,65 @@ export default function Telemetry({ status }) {
           <div className="telem-card">
             <div className="telem-label">Latitude</div>
             <div className="telem-value cyan" style={{ fontSize: '1.1rem' }}>
-              {lat.toFixed(4)}°
+              {telemetry.latitude.toFixed(4)}°
             </div>
           </div>
           <div className="telem-card">
             <div className="telem-label">Longitude</div>
             <div className="telem-value cyan" style={{ fontSize: '1.1rem' }}>
-              {lon.toFixed(4)}°
+              {telemetry.longitude.toFixed(4)}°
             </div>
           </div>
           <div className="telem-card">
             <div className="telem-label">Altitude</div>
             <div className="telem-value purple" style={{ fontSize: '1.1rem' }}>
-              {altitude.toFixed(1)}
+              {telemetry.altitude_km.toFixed(1)}
               <span className="telem-unit">km</span>
             </div>
           </div>
           <div className="telem-card">
             <div className="telem-label">Velocity</div>
             <div className="telem-value purple" style={{ fontSize: '1.1rem' }}>
-              {speed.toFixed(2)}
+              {telemetry.speed_km_s.toFixed(2)}
               <span className="telem-unit">km/s</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ECI State (raw) */}
+      {/* Subsystems */}
+      <div className="sidebar-section">
+        <div className="section-header">
+          <div className="section-title">
+            <Thermometer size={14} /> Subsystems
+          </div>
+        </div>
+        <div className="telemetry-grid">
+          <div className="telem-card">
+            <div className="telem-label">Temp</div>
+            <div className="telem-value green" style={{ fontSize: '1.1rem' }}>
+              {telemetry.temperature_c}
+              <span className="telem-unit">°C</span>
+            </div>
+          </div>
+          <div className="telem-card">
+            <div className="telem-label">Solar</div>
+            <div className="telem-value yellow" style={{ fontSize: '1.1rem' }}>
+              {telemetry.solar_panel_current_a}
+              <span className="telem-unit">A</span>
+            </div>
+          </div>
+          <div className="telem-card full-width">
+            <div className="telem-label">Mode</div>
+            <div className="telem-value green" style={{ fontSize: '0.9rem' }}>
+              <Zap size={12} style={{ display: 'inline', marginRight: 4 }} />
+              {telemetry.mode}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ECI State */}
       <div className="sidebar-section" style={{ flex: 1, overflow: 'auto' }}>
         <div className="section-header">
           <div className="section-title">
@@ -166,47 +183,47 @@ export default function Telemetry({ status }) {
           <div>
             <span style={{ color: 'var(--text-secondary)' }}>Rx</span>{' '}
             <span style={{ color: 'var(--accent-cyan)' }}>
-              {status.position[0].toFixed(3)}
+              {telemetry.position_eci[0].toFixed(3)}
             </span>{' '}
             km
           </div>
           <div>
             <span style={{ color: 'var(--text-secondary)' }}>Ry</span>{' '}
             <span style={{ color: 'var(--accent-cyan)' }}>
-              {status.position[1].toFixed(3)}
+              {telemetry.position_eci[1].toFixed(3)}
             </span>{' '}
             km
           </div>
           <div>
             <span style={{ color: 'var(--text-secondary)' }}>Rz</span>{' '}
             <span style={{ color: 'var(--accent-cyan)' }}>
-              {status.position[2].toFixed(3)}
+              {telemetry.position_eci[2].toFixed(3)}
             </span>{' '}
             km
           </div>
           <div style={{ marginTop: 8 }}>
             <span style={{ color: 'var(--text-secondary)' }}>Vx</span>{' '}
             <span style={{ color: 'var(--accent-purple)' }}>
-              {status.velocity[0].toFixed(5)}
+              {telemetry.velocity_eci[0].toFixed(5)}
             </span>{' '}
             km/s
           </div>
           <div>
             <span style={{ color: 'var(--text-secondary)' }}>Vy</span>{' '}
             <span style={{ color: 'var(--accent-purple)' }}>
-              {status.velocity[1].toFixed(5)}
+              {telemetry.velocity_eci[1].toFixed(5)}
             </span>{' '}
             km/s
           </div>
           <div>
             <span style={{ color: 'var(--text-secondary)' }}>Vz</span>{' '}
             <span style={{ color: 'var(--accent-purple)' }}>
-              {status.velocity[2].toFixed(5)}
+              {telemetry.velocity_eci[2].toFixed(5)}
             </span>{' '}
             km/s
           </div>
           <div style={{ marginTop: 12, color: 'var(--text-muted)', fontSize: '0.65rem' }}>
-            Last Update: {new Date(status.timestamp).toLocaleTimeString()}
+            {new Date(telemetry.timestamp).toLocaleTimeString()} UTC
           </div>
         </div>
       </div>

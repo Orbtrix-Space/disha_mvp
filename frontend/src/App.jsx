@@ -1,79 +1,47 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import { useWebSocket } from './hooks/useWebSocket';
 import { api } from './services/api';
 import Header from './components/Header';
-import SatelliteMap, { eciToGeodetic } from './components/SatelliteMap';
+import CesiumGlobe from './components/CesiumGlobe';
 import Telemetry from './components/Telemetry';
 import MissionPlanner from './components/MissionPlanner';
+import FDIRPanel from './components/FDIRPanel';
+import TLEPanel from './components/TLEPanel';
+import FlightPanel from './components/FlightPanel';
 
-const POLL_INTERVAL = 2000;
-const MAX_TRACK_POINTS = 200;
+const WS_URL = 'ws://127.0.0.1:8000/ws/telemetry';
 
 function App() {
-  const [view, setView] = useState('dashboard');
-  const [status, setStatus] = useState(null);
-  const [health, setHealth] = useState('offline');
-  const [groundTrack, setGroundTrack] = useState([]);
-
-  // Poll satellite status
-  useEffect(() => {
-    let active = true;
-
-    const poll = async () => {
-      const data = await api.getStatus();
-      if (!active) return;
-
-      if (data) {
-        setHealth('online');
-        setStatus(data);
-        const pos = eciToGeodetic(
-          data.position[0],
-          data.position[1],
-          data.position[2]
-        );
-        setGroundTrack((prev) => [...prev, pos].slice(-MAX_TRACK_POINTS));
-      } else {
-        setHealth('offline');
-      }
-    };
-
-    poll();
-    const id = setInterval(poll, POLL_INTERVAL);
-    return () => {
-      active = false;
-      clearInterval(id);
-    };
-  }, []);
+  const [view, setView] = useState('control');
+  const { telemetry, alerts, connected, clearAlerts } = useWebSocket(WS_URL);
 
   const handleReset = useCallback(async () => {
-    const res = await api.resetSatellite();
-    if (res) {
-      setStatus(res.satellite_health);
-      setGroundTrack([]);
-    }
-  }, []);
+    await api.resetSatellite();
+    clearAlerts();
+  }, [clearAlerts]);
 
   return (
     <div className="app-layout">
       <Header
         view={view}
         setView={setView}
-        health={health}
+        health={connected ? 'online' : 'offline'}
         onReset={handleReset}
+        alertCount={alerts.filter((a) => a.severity === 'CRITICAL').length}
       />
 
       <div className="main-content">
-        {view === 'dashboard' && (
+        {view === 'control' && (
           <div className="dashboard-layout">
-            <SatelliteMap
-              groundTrack={groundTrack}
-              currentPos={status?.position}
-              velocity={status?.velocity}
-            />
-            <Telemetry status={status} />
+            <CesiumGlobe telemetry={telemetry} />
+            <Telemetry telemetry={telemetry} />
           </div>
         )}
 
-        {view === 'planner' && <MissionPlanner />}
+        {view === 'flight' && <FlightPanel />}
+        {view === 'plan' && <MissionPlanner />}
+        {view === 'events' && <FDIRPanel alerts={alerts} />}
+        {view === 'tle' && <TLEPanel />}
       </div>
     </div>
   );

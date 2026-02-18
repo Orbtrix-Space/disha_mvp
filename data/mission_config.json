@@ -1,5 +1,6 @@
 {
     "satellite_id": "DISHA-SAT-01",
+    "default_norad_id": 25544,
 
     "orbit": {
         "epoch": "2025-02-04T12:00:00Z",
@@ -15,5 +16,19 @@
 
     "data_system": {
         "max_storage_gb": 1024.0
+    },
+
+    "fdir": {
+        "battery_warn_pct": 20,
+        "battery_crit_pct": 10,
+        "storage_warn_pct": 90,
+        "altitude_crit_km": 200,
+        "thermal_min_c": -20,
+        "thermal_max_c": 60,
+        "anomaly_contamination": 0.05
+    },
+
+    "telemetry": {
+        "broadcast_interval_sec": 1.0
     }
 }

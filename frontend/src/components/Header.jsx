@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Satellite, Map, Send, RotateCcw } from 'lucide-react';
+import { Satellite, Monitor, Orbit, Send, ShieldAlert, Radio, RotateCcw } from 'lucide-react';
 
 function Clock() {
   const [time, setTime] = useState(new Date());
@@ -14,7 +14,15 @@ function Clock() {
   return <div className="header-clock">{utc}</div>;
 }
 
-export default function Header({ view, setView, health, onReset }) {
+const TABS = [
+  { key: 'control', label: 'CONTROL', icon: Monitor },
+  { key: 'flight', label: 'FLIGHT', icon: Orbit },
+  { key: 'plan', label: 'PLAN', icon: Send },
+  { key: 'events', label: 'EVENTS', icon: ShieldAlert },
+  { key: 'tle', label: 'TLE', icon: Radio },
+];
+
+export default function Header({ view, setView, health, onReset, alertCount = 0 }) {
   return (
     <header className="header">
       <div className="header-left">
@@ -22,23 +30,24 @@ export default function Header({ view, setView, health, onReset }) {
           <Satellite size={22} />
           <div>
             <div className="header-title">DISHA</div>
-            <div className="header-subtitle">Mission Control</div>
+            <div className="header-subtitle">Satellite Operations</div>
           </div>
         </div>
 
         <nav className="header-nav" style={{ marginLeft: 24 }}>
-          <button
-            className={`nav-btn ${view === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setView('dashboard')}
-          >
-            <Map size={14} /> Dashboard
-          </button>
-          <button
-            className={`nav-btn ${view === 'planner' ? 'active' : ''}`}
-            onClick={() => setView('planner')}
-          >
-            <Send size={14} /> Mission Planner
-          </button>
+          {TABS.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              className={`nav-btn ${view === key ? 'active' : ''}`}
+              onClick={() => setView(key)}
+              style={key === 'events' ? { position: 'relative' } : undefined}
+            >
+              <Icon size={14} /> {label}
+              {key === 'events' && alertCount > 0 && (
+                <span className="alert-badge">{alertCount}</span>
+              )}
+            </button>
+          ))}
         </nav>
       </div>
 
