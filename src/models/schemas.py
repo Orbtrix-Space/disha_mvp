@@ -52,13 +52,18 @@ class TelemetryFrame(BaseModel):
     longitude: float
     battery_wh: float
     battery_pct: float
+    bus_voltage: float
+    solar_panel_current_a: float
     storage_used_gb: float
     storage_pct: float
     max_battery_wh: float
     max_storage_gb: float
-    temperature_c: float
-    attitude_quaternion: List[float]
-    solar_panel_current_a: float
+    panel_temp_c: float
+    battery_temp_c: float
+    snr_db: float
+    link_status: str
+    attitude_mode: str
+    payload_status: str
     mode: str
 
 
@@ -69,11 +74,7 @@ class FDIRAlertModel(BaseModel):
     message: str
     timestamp: str
     value: float
-
-
-class RelNavRequest(BaseModel):
-    primary_state: dict
-    secondary_state: dict
+    corrective_action: str = ""
 
 
 class OrbitalElements(BaseModel):
@@ -97,10 +98,36 @@ class GroundStationPass(BaseModel):
     max_elevation_deg: float
 
 
-class ConjunctionEvent(BaseModel):
-    object_name: str
-    norad_id: int
-    tca_hours_ahead: int
-    miss_distance_km: float
-    collision_probability: float
-    status: str
+class Telecommand(BaseModel):
+    command_id: str
+    task_id: str
+    command_type: str
+    description: str = ""
+    parameters: dict = {}
+    scheduled_time: str = ""
+    status: str = "PENDING"
+
+
+class CommandSequence(BaseModel):
+    sequence_id: str
+    plan_id: str
+    commands: List[Telecommand]
+    total_commands: int
+    created_at: str
+    approved: bool = False
+    approved_by: Optional[str] = None
+    approved_at: Optional[str] = None
+
+
+class PowerPredictionPoint(BaseModel):
+    time_offset_min: float
+    soc_pct: float
+    in_eclipse: bool
+    solar_generation_w: float
+    load_consumption_w: float
+
+
+class PowerPrediction(BaseModel):
+    prediction_points: List[PowerPredictionPoint]
+    min_soc_pct: float
+    power_margin_wh: float

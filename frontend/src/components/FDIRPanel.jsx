@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AlertTriangle, ShieldAlert, Filter, Activity, Cpu } from 'lucide-react';
+import { AlertTriangle, ShieldAlert, Activity, Shield, Clock, CheckCircle } from 'lucide-react';
 import { api } from '../services/api';
 
 const SEVERITY_CONFIG = {
@@ -9,17 +9,16 @@ const SEVERITY_CONFIG = {
 
 export default function FDIRPanel({ alerts }) {
   const [filter, setFilter] = useState('all');
-  const [fdirStatus, setFdirStatus] = useState(null);
+  const [fdirSummary, setFdirSummary] = useState(null);
 
   useEffect(() => {
-    api.getFDIRStatus().then((data) => {
-      if (data) setFdirStatus(data);
-    });
-    const id = setInterval(() => {
-      api.getFDIRStatus().then((data) => {
-        if (data) setFdirStatus(data);
+    const fetch = () => {
+      api.getFDIRSummary().then((data) => {
+        if (data) setFdirSummary(data);
       });
-    }, 10000);
+    };
+    fetch();
+    const id = setInterval(fetch, 5000);
     return () => clearInterval(id);
   }, []);
 
@@ -38,23 +37,55 @@ export default function FDIRPanel({ alerts }) {
           <ShieldAlert size={14} /> Event Management
         </div>
 
-        {/* Status bar */}
-        {fdirStatus && (
-          <div className="fdir-status-bar">
-            <div className="fdir-status-item">
-              <Activity size={10} />
-              <span>Rules: {fdirStatus.rules_enabled ? 'ON' : 'OFF'}</span>
+        {/* FDIR Summary Bar */}
+        {fdirSummary && (
+          <div className="fdir-summary-bar">
+            <div className="fdir-summary-card">
+              <div className="fdir-summary-label">Rules Active</div>
+              <div className="fdir-summary-value" style={{ color: 'var(--accent-cyan)' }}>
+                {fdirSummary.rules_active}
+              </div>
             </div>
-            <div className="fdir-status-item">
-              <Cpu size={10} />
-              <span>ML: {fdirStatus.ml_trained ? 'Trained' : `Learning (${fdirStatus.samples_collected}/60)`}</span>
+            <div className="fdir-summary-card">
+              <div className="fdir-summary-label">Last Check</div>
+              <div className="fdir-summary-value" style={{ color: 'var(--text-secondary)' }}>
+                <Clock size={10} style={{ display: 'inline', marginRight: 3 }} />
+                {fdirSummary.last_evaluation_time}
+              </div>
             </div>
-            <div className="fdir-status-item">
-              <AlertTriangle size={10} />
-              <span>{critCount} Critical / {warnCount} Warning</span>
+            <div className="fdir-summary-card">
+              <div className="fdir-summary-label">Risk Score</div>
+              <div className="fdir-summary-value" style={{
+                color: fdirSummary.status === 'NOMINAL' ? 'var(--accent-green)'
+                  : fdirSummary.status === 'CRITICAL' ? 'var(--accent-red)'
+                  : 'var(--accent-yellow)',
+              }}>
+                {fdirSummary.status}
+              </div>
+            </div>
+            <div className="fdir-summary-card">
+              <div className="fdir-summary-label">Auto Actions</div>
+              <div className="fdir-summary-value" style={{ color: 'var(--accent-purple)' }}>
+                {fdirSummary.auto_actions_today}
+              </div>
             </div>
           </div>
         )}
+
+        {/* Status counts */}
+        <div className="fdir-status-bar">
+          <div className="fdir-status-item">
+            <Activity size={10} />
+            <span>Engine: ACTIVE</span>
+          </div>
+          <div className="fdir-status-item">
+            <AlertTriangle size={10} />
+            <span>{critCount} Critical / {warnCount} Warning</span>
+          </div>
+          <div className="fdir-status-item">
+            <span>Total: {fdirSummary?.total_alerts || 0}</span>
+          </div>
+        </div>
 
         {/* Filters */}
         <div className="fdir-filters">
@@ -75,12 +106,20 @@ export default function FDIRPanel({ alerts }) {
       {/* Alert list */}
       <div className="fdir-list">
         {filtered.length === 0 ? (
-          <div className="empty-state" style={{ paddingTop: 80 }}>
-            <ShieldAlert size={48} />
-            <div className="empty-state-title">No Events</div>
-            <div className="empty-state-desc">
-              Event management engine is monitoring telemetry. Anomalies and alerts will appear here.
+          <div className="fdir-nominal-state">
+            <div className="fdir-nominal-icon">
+              <CheckCircle size={48} />
             </div>
+            <div className="fdir-nominal-title">System Nominal</div>
+            <div className="fdir-nominal-desc">
+              All rules within threshold. FDIR engine monitoring {fdirSummary?.rules_active || 7} constraint rules at 1 Hz.
+            </div>
+            {fdirSummary && (
+              <div className="fdir-nominal-stats">
+                <span>Last evaluation: {fdirSummary.last_evaluation_time}</span>
+                <span>Auto actions today: {fdirSummary.auto_actions_today}</span>
+              </div>
+            )}
           </div>
         ) : (
           filtered.map((alert, i) => {
@@ -102,6 +141,14 @@ export default function FDIRPanel({ alerts }) {
                   <span className="fdir-alert-code">{alert.code}</span>
                 </div>
                 <div className="fdir-alert-message">{alert.message}</div>
+                {alert.corrective_action && (
+                  <div className="fdir-alert-action">
+                    <span style={{ color: 'var(--accent-cyan)', fontSize: '0.6rem', fontWeight: 600 }}>
+                      RECOMMENDED ACTION:
+                    </span>
+                    <span>{alert.corrective_action}</span>
+                  </div>
+                )}
                 <div className="fdir-alert-time">
                   {new Date(alert.timestamp).toLocaleTimeString()}
                 </div>

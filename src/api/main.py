@@ -14,10 +14,14 @@ from src.core.flight_dynamics.transforms import eci_to_ecef, ecef_to_lla
 from src.core.mission_planner import generate_mission_plan
 from src.core.telemetry import ConnectionManager, build_telemetry_frame
 from src.core.fdir.engine import FDIREngine
-from src.core.relnav import compute_relative_state
 from src.core.orbital_elements import state_to_keplerian
 from src.core.ground_stations import GroundStationPassPredictor, GROUND_STATIONS
-from src.core.conjunction import ConjunctionAnalyzer
+from src.core.power_prediction import predict_power
+from src.core.command_engine import CommandEngine
+from src.core.constraint_engine import evaluate_constraints
+from src.core.power_projection import project_power
+from src.core.autonomy_manager import AutonomyManager
+from src.core.scheduler_enhancer import compute_feasibility, detect_conflicts
 from src.models.schemas import UserRequest
 
 
@@ -28,10 +32,6 @@ class ScheduleRequest(BaseModel):
 class TLELoadRequest(BaseModel):
     norad_id: int
 
-class RelNavRequest(BaseModel):
-    primary_state: dict
-    secondary_state: dict
-
 
 # --- Global State ---
 satellite = MissionState()
@@ -39,9 +39,16 @@ tle_manager = TLEManager()
 fdir_engine = FDIREngine()
 ws_manager = ConnectionManager()
 pass_predictor = GroundStationPassPredictor()
-conjunction_analyzer = ConjunctionAnalyzer()
+command_engine = CommandEngine()
+autonomy_manager = AutonomyManager()
 
 satellite.tle_manager = tle_manager
+
+# Cache for constraint/autonomy results (updated each tick)
+_intelligence_cache = {
+    "constraints": {"risk_score": 0, "active_constraints": []},
+    "autonomy": autonomy_manager.get_status(),
+}
 
 
 # --- Background Telemetry Loop ---
@@ -52,6 +59,13 @@ async def telemetry_loop():
             raw_state = satellite.get_state()
             frame = build_telemetry_frame(raw_state)
             alerts = fdir_engine.check(frame)
+
+            # Update intelligence layer each tick
+            constraint_result = evaluate_constraints(frame)
+            _intelligence_cache["constraints"] = constraint_result
+            autonomy_result = autonomy_manager.evaluate(frame, constraint_result)
+            _intelligence_cache["autonomy"] = autonomy_result
+
             await ws_manager.broadcast({
                 "telemetry": frame,
                 "alerts": alerts,
@@ -77,7 +91,7 @@ async def lifespan(app: FastAPI):
 # --- App Init ---
 app = FastAPI(
     title="DISHA Mission Control API",
-    description="Unified satellite mission control backend.",
+    description="Satellite mission operations platform - MVP",
     version="2.0.0",
     lifespan=lifespan,
 )
@@ -141,23 +155,56 @@ def api_generate_plan(payload: ScheduleRequest):
     for task in mission_plan.schedule:
         satellite.update_state(task.power_cost_wh, task.data_cost_gb)
 
+    # Generate telecommand sequence
+    command_sequence_id = None
+    if mission_plan.schedule:
+        seq = command_engine.generate_sequence(
+            [{"task_id": t.task_id, "action": t.action,
+              "start_time": t.start_time.isoformat(),
+              "end_time": t.end_time.isoformat(),
+              "power_cost_wh": round(t.power_cost_wh, 2),
+              "data_cost_gb": round(t.data_cost_gb, 2)}
+             for t in mission_plan.schedule]
+        )
+        command_sequence_id = seq["sequence_id"]
+
+    # Build plan details
+    plan_details = [
+        {
+            "task_id": t.task_id,
+            "action": t.action,
+            "start_time": t.start_time.isoformat(),
+            "end_time": t.end_time.isoformat(),
+            "power_cost_wh": round(t.power_cost_wh, 2),
+            "data_cost_gb": round(t.data_cost_gb, 2),
+        }
+        for t in mission_plan.schedule
+    ]
+
+    # Compute feasibility scores for each task
+    try:
+        passes = pass_predictor.compute_passes(satellite, duration_hours=24.0)
+    except Exception:
+        passes = []
+
+    feasibility_scores = []
+    for task_detail in plan_details:
+        score = compute_feasibility(task_detail, satellite, passes)
+        feasibility_scores.append(score)
+
+    # Detect conflicts
+    conflicts = detect_conflicts(plan_details, satellite)
+
     return {
         "status": "SUCCESS",
         "scheduled_tasks": len(mission_plan.schedule),
         "total_requests": len(payload.requests),
         "feasible_requests": len(valid_requests),
         "satellite_health": satellite.get_state(),
-        "plan_details": [
-            {
-                "task_id": t.task_id,
-                "action": t.action,
-                "start_time": t.start_time.isoformat(),
-                "end_time": t.end_time.isoformat(),
-                "power_cost_wh": round(t.power_cost_wh, 2),
-                "data_cost_gb": round(t.data_cost_gb, 2),
-            }
-            for t in mission_plan.schedule
-        ],
+        "command_sequence_id": command_sequence_id,
+        "plan_details": plan_details,
+        "feasibility_scores": feasibility_scores,
+        "conflicts": conflicts,
     }
 
 
@@ -167,6 +214,8 @@ def reset_satellite():
     satellite = MissionState()
     satellite.tle_manager = tle_manager
     fdir_engine.reset()
+    command_engine.reset()
+    autonomy_manager.reset()
     return {"status": "RESET", "satellite_health": satellite.get_state()}
 
 
@@ -211,13 +260,44 @@ def get_fdir_status():
     return fdir_engine.get_status()
 
 
+@app.get("/fdir/summary")
+def get_fdir_summary():
+    return fdir_engine.get_summary()
+
+
 # ========================================
-# Relative Navigation
+# Intelligence Layer
 # ========================================
 
-@app.post("/relnav/compute")
-def compute_relnav(payload: RelNavRequest):
-    return compute_relative_state(payload.primary_state, payload.secondary_state)
+@app.get("/intelligence/autonomy")
+def get_autonomy_status():
+    return _intelligence_cache["autonomy"]
+
+
+@app.get("/intelligence/constraints")
+def get_constraints():
+    return _intelligence_cache["constraints"]
+
+
+@app.get("/intelligence/power-projection")
+def get_power_projection():
+    try:
+        return project_power(satellite)
+    except Exception as e:
+        return {
+            "current_battery": 0,
+            "current_mode": "UNKNOWN",
+            "projected_next_eclipse": 0,
+            "projected_next_orbit": 0,
+            "time_to_next_eclipse_min": 0,
+            "power_warning": False,
+            "warning_reason": str(e),
+        }
+
+
+@app.get("/intelligence/decisions")
+def get_autonomy_decisions():
+    return {"decisions": autonomy_manager.get_decisions_log()}
 
 
 # ========================================
@@ -282,16 +362,73 @@ def get_passes():
         return {"passes": [], "error": str(e)}
 
 
-@app.get("/flight/conjunction")
-def get_conjunction():
-    state = satellite.get_state()
-    events = conjunction_analyzer.assess(state)
-    return {"events": events}
-
-
 @app.get("/flight/ground-stations")
 def get_ground_stations():
     return {"stations": GROUND_STATIONS}
+
+
+# ========================================
+# Power Prediction
+# ========================================
+
+@app.get("/power/prediction")
+def get_power_prediction():
+    try:
+        # Extract scheduled tasks from command engine for task-aware prediction
+        scheduled_tasks = []
+        sequences = command_engine.get_all_sequences()
+        for seq in sequences:
+            if not seq.get("approved"):
+                continue
+            seen_tasks = {}
+            for cmd in seq.get("commands", []):
+                tid = cmd.get("task_id", "")
+                if tid not in seen_tasks:
+                    action = cmd.get("parameters", {}).get("task_action", "IMAGING")
+                    seen_tasks[tid] = action
+            # Distribute approved tasks evenly across the 90-min window
+            task_list = list(seen_tasks.values())
+            if task_list:
+                spacing = 90 // max(len(task_list), 1)
+                for i, action in enumerate(task_list):
+                    scheduled_tasks.append({
+                        "action": action,
+                        "start_min": i * spacing + 5,
+                        "duration_min": 5 if action == "IMAGING" else 8,
+                    })
+
+        prediction = predict_power(satellite, duration_minutes=90, step_minutes=1,
+                                   scheduled_tasks=scheduled_tasks if scheduled_tasks else None)
+        return prediction
+    except Exception as e:
+        return {"error": str(e), "prediction_points": [], "min_soc_pct": 0, "power_margin_wh": 0}
+
+
+# ========================================
+# Command Engine
+# ========================================
+
+@app.get("/commands")
+def get_commands():
+    return {"sequences": command_engine.get_all_sequences()}
+
+
+@app.get("/commands/log")
+def get_command_log():
+    return {"log": command_engine.get_log()}
+
+
+@app.get("/commands/{sequence_id}")
+def get_command_sequence(sequence_id: str):
+    seq = command_engine.get_sequence(sequence_id)
+    if seq is None:
+        return {"status": "ERROR", "message": "Sequence not found"}
+    return seq
+
+
+@app.post("/commands/{sequence_id}/approve")
+def approve_commands(sequence_id: str):
+    return command_engine.approve_sequence(sequence_id)
 
 
 # ========================================

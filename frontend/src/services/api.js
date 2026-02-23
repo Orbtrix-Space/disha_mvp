@@ -90,22 +90,22 @@ export const api = {
     }
   },
 
+  getFDIRSummary: async () => {
+    try {
+      const response = await client.get('/fdir/summary');
+      return response.data;
+    } catch (error) {
+      console.error("FDIR Summary Error:", error.message);
+      return null;
+    }
+  },
+
   getOrbitPrediction: async () => {
     try {
       const response = await client.get('/orbit/prediction');
       return response.data;
     } catch (error) {
       console.error("Orbit Prediction Error:", error.message);
-      return null;
-    }
-  },
-
-  getOrbitalElements: async () => {
-    try {
-      const response = await client.get('/flight/orbital-elements');
-      return response.data;
-    } catch (error) {
-      console.error("Orbital Elements Error:", error.message);
       return null;
     }
   },
@@ -120,22 +120,83 @@ export const api = {
     }
   },
 
-  getConjunctionAssessment: async () => {
-    try {
-      const response = await client.get('/flight/conjunction');
-      return response.data;
-    } catch (error) {
-      console.error("Conjunction Error:", error.message);
-      return null;
-    }
-  },
-
   getGroundStations: async () => {
     try {
       const response = await client.get('/flight/ground-stations');
       return response.data;
     } catch (error) {
       console.error("Ground Stations Error:", error.message);
+      return null;
+    }
+  },
+
+  getPowerPrediction: async () => {
+    try {
+      const response = await client.get('/power/prediction');
+      return response.data;
+    } catch (error) {
+      console.error("Power Prediction Error:", error.message);
+      return null;
+    }
+  },
+
+  getCommandSequences: async () => {
+    try {
+      const response = await client.get('/commands');
+      return response.data;
+    } catch (error) {
+      console.error("Commands Error:", error.message);
+      return null;
+    }
+  },
+
+  approveCommandSequence: async (sequenceId) => {
+    try {
+      const response = await client.post(`/commands/${sequenceId}/approve`);
+      return response.data;
+    } catch (error) {
+      console.error("Approve Error:", error.message);
+      return null;
+    }
+  },
+
+  // Intelligence Layer
+  getAutonomyStatus: async () => {
+    try {
+      const response = await client.get('/intelligence/autonomy');
+      return response.data;
+    } catch (error) {
+      console.error("Autonomy Error:", error.message);
+      return null;
+    }
+  },
+
+  getConstraints: async () => {
+    try {
+      const response = await client.get('/intelligence/constraints');
+      return response.data;
+    } catch (error) {
+      console.error("Constraints Error:", error.message);
+      return null;
+    }
+  },
+
+  getPowerProjection: async () => {
+    try {
+      const response = await client.get('/intelligence/power-projection');
+      return response.data;
+    } catch (error) {
+      console.error("Power Projection Error:", error.message);
+      return null;
+    }
+  },
+
+  getAutonomyDecisions: async () => {
+    try {
+      const response = await client.get('/intelligence/decisions');
+      return response.data;
+    } catch (error) {
+      console.error("Decisions Error:", error.message);
       return null;
     }
   },

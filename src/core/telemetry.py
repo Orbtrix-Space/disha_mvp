@@ -1,5 +1,4 @@
 import json
-import random
 from fastapi import WebSocket
 
 
@@ -48,15 +47,24 @@ def build_telemetry_frame(state: dict) -> dict:
         "speed_km_s": round(speed_km_s, 5),
         "latitude": state.get("latitude", 0.0),
         "longitude": state.get("longitude", 0.0),
+        # Power
         "battery_wh": state["battery_wh"],
         "battery_pct": state["battery_pct"],
+        "bus_voltage": state["bus_voltage"],
+        "solar_panel_current_a": state["solar_panel_current_a"],
         "storage_used_gb": state["storage_used_gb"],
         "storage_pct": state["storage_pct"],
         "max_battery_wh": state["max_battery_wh"],
         "max_storage_gb": state["max_storage_gb"],
-        # Placeholder subsystem data
-        "temperature_c": round(20 + 10 * random.uniform(-1, 1), 1),
-        "attitude_quaternion": [1.0, 0.0, 0.0, 0.0],
-        "solar_panel_current_a": round(1.5 + 0.3 * random.uniform(-1, 1), 2),
-        "mode": "NOMINAL",
+        # Thermal
+        "panel_temp_c": state["panel_temp_c"],
+        "battery_temp_c": state["battery_temp_c"],
+        # Comms
+        "snr_db": state["snr_db"],
+        "link_status": state["link_status"],
+        # Attitude & Payload
+        "attitude_mode": state["attitude_mode"],
+        "payload_status": state["payload_status"],
+        # Derived mode
+        "mode": "NOMINAL" if state["link_status"] == "NOMINAL" else "DEGRADED",
     }

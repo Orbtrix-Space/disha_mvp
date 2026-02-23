@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Satellite, Monitor, Orbit, Send, ShieldAlert, Radio, RotateCcw } from 'lucide-react';
+import { Satellite, Monitor, Send, ShieldAlert, RotateCcw } from 'lucide-react';
 
 function Clock() {
   const [time, setTime] = useState(new Date());
@@ -16,10 +16,8 @@ function Clock() {
 
 const TABS = [
   { key: 'control', label: 'CONTROL', icon: Monitor },
-  { key: 'flight', label: 'FLIGHT', icon: Orbit },
-  { key: 'plan', label: 'PLAN', icon: Send },
-  { key: 'events', label: 'EVENTS', icon: ShieldAlert },
-  { key: 'tle', label: 'TLE', icon: Radio },
+  { key: 'fdir', label: 'FDIR', icon: ShieldAlert },
+  { key: 'schedule', label: 'SCHEDULE', icon: Send },
 ];
 
 export default function Header({ view, setView, health, onReset, alertCount = 0 }) {
@@ -40,10 +38,10 @@ export default function Header({ view, setView, health, onReset, alertCount = 0 
               key={key}
               className={`nav-btn ${view === key ? 'active' : ''}`}
               onClick={() => setView(key)}
-              style={key === 'events' ? { position: 'relative' } : undefined}
+              style={key === 'fdir' ? { position: 'relative' } : undefined}
             >
               <Icon size={14} /> {label}
-              {key === 'events' && alertCount > 0 && (
+              {key === 'fdir' && alertCount > 0 && (
                 <span className="alert-badge">{alertCount}</span>
               )}
             </button>

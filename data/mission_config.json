@@ -24,8 +24,7 @@
         "storage_warn_pct": 90,
         "altitude_crit_km": 200,
         "thermal_min_c": -20,
-        "thermal_max_c": 60,
-        "anomaly_contamination": 0.05
+        "thermal_max_c": 60
     },
 
     "telemetry": {

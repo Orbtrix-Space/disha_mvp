@@ -13,6 +13,7 @@ export default function CesiumGlobe({ telemetry }) {
   const orbitLineRef = useRef(null);
   const groundTrackRef = useRef(null);
   const [tracking, setTracking] = useState(false);
+  const [inEclipse, setInEclipse] = useState(false);
   const stationsAddedRef = useRef(false);
 
   // Initialize Cesium viewer
@@ -36,21 +37,55 @@ export default function CesiumGlobe({ telemetry }) {
       skyBox: false,
       skyAtmosphere: new Cesium.SkyAtmosphere(),
       orderIndependentTranslucency: false,
+      msaaSamples: 4,
+      useBrowserRecommendedResolution: true,
+      requestRenderMode: false,
     });
 
-    // Add real Earth satellite imagery (ArcGIS World Imagery - free)
+    // Crisp rendering — cap at 1.5x to avoid GPU overload
+    viewer.resolutionScale = Math.min(window.devicePixelRatio || 1.0, 1.5);
+
+    // Add real Earth satellite imagery (ArcGIS World Imagery - free, high quality)
     viewer.imageryLayers.addImageryProvider(
       new Cesium.UrlTemplateImageryProvider({
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        maximumLevel: 18,
+        maximumLevel: 19,
         credit: 'Esri, Maxar, Earthstar Geographics',
       })
     );
 
-    // Dark scene
+    // === REALISTIC ECLIPSE: Enable sun-based lighting ===
+    viewer.scene.globe.enableLighting = true;
+    viewer.clock.shouldAnimate = true;
+    // Sync Cesium clock to real current time
+    viewer.clock.currentTime = Cesium.JulianDate.now();
+    viewer.clock.multiplier = 1; // real-time
+
+    // Scene quality
     viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#000000');
     viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#0a101f');
     viewer.scene.globe.showGroundAtmosphere = true;
+
+    // Atmosphere glow
+    viewer.scene.skyAtmosphere.brightnessShift = 0.0;
+    viewer.scene.skyAtmosphere.hueShift = 0.0;
+    viewer.scene.skyAtmosphere.saturationShift = 0.0;
+
+    // Enable HDR for better lighting contrast
+    viewer.scene.highDynamicRange = true;
+
+    // Enable sun and moon
+    viewer.scene.sun = new Cesium.Sun();
+    viewer.scene.moon = new Cesium.Moon();
+    viewer.scene.sun.show = true;
+
+    // Globe rendering quality
+    viewer.scene.globe.maximumScreenSpaceError = 1.5; // sharper tiles (default is 2)
+    viewer.scene.fxaa = true; // anti-aliasing
+
+    // Night side dim lighting (makes eclipse visible)
+    viewer.scene.globe.nightFadeOutDistance = 1e7;
+    viewer.scene.globe.nightFadeInDistance = 5e7;
 
     // Satellite entity
     entityRef.current = viewer.entities.add({
@@ -155,6 +190,25 @@ export default function CesiumGlobe({ telemetry }) {
     );
     entityRef.current.position = pos;
 
+    // Eclipse detection: check if satellite is in Earth's shadow
+    if (viewerRef.current) {
+      const sunPos = Cesium.Simon1994PlanetaryPositions.computeSunPositionInEarthInertialFrame(
+        viewerRef.current.clock.currentTime
+      );
+      if (sunPos) {
+        const satCartesian = pos;
+        const sunDir = Cesium.Cartesian3.normalize(sunPos, new Cesium.Cartesian3());
+        const satDir = Cesium.Cartesian3.normalize(satCartesian, new Cesium.Cartesian3());
+        const dot = Cesium.Cartesian3.dot(sunDir, satDir);
+        // Simple cylindrical shadow: satellite is in eclipse when on opposite side of Earth from Sun
+        const earthRadius = 6371000;
+        const satDist = Cesium.Cartesian3.magnitude(satCartesian);
+        const shadowAngle = Math.asin(earthRadius / satDist);
+        const sunAngle = Math.acos(Math.max(-1, Math.min(1, dot)));
+        setInEclipse(sunAngle > Math.PI / 2 + shadowAngle);
+      }
+    }
+
     if (tracking && viewerRef.current) {
       viewerRef.current.camera.lookAt(
         pos,
@@ -218,6 +272,9 @@ export default function CesiumGlobe({ telemetry }) {
             </div>
             <div className="map-stat-chip">
               VEL <span className="value">{telemetry.speed_km_s.toFixed(2)} km/s</span>
+            </div>
+            <div className={`map-stat-chip ${inEclipse ? 'eclipse-active' : 'sunlit-active'}`}>
+              {inEclipse ? '🌑 ECLIPSE' : '☀️ SUNLIT'}
             </div>
             <button
               className={`map-stat-chip ${tracking ? 'tracking-active' : ''}`}
