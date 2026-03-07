@@ -4,6 +4,14 @@ export function useWebSocket(url) {
   const [telemetry, setTelemetry] = useState(null);
   const [alerts, setAlerts] = useState([]);
   const [connected, setConnected] = useState(false);
+  const [contactState, setContactState] = useState({
+    inContact: false,
+    source: 'PREDICTED',
+    station: null,
+    elevationDeg: 0,
+    blackoutSec: 0,
+  });
+  const [bufferDump, setBufferDump] = useState(null);
   const wsRef = useRef(null);
   const alertsRef = useRef([]);
 
@@ -34,8 +42,36 @@ export function useWebSocket(url) {
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
 
+        if (data.type === 'tle_loaded') {
+          // New satellite loaded — clear all old state
+          alertsRef.current = [];
+          setAlerts([]);
+          setBufferDump(null);
+          setTelemetry(null);
+          return;
+        }
+
+        if (data.type === 'buffer_dump') {
+          // Ground station contact acquired — received stored telemetry
+          setBufferDump({
+            frames: data.frames,
+            count: data.count,
+            receivedAt: Date.now(),
+          });
+          return;
+        }
+
         if (data.telemetry) {
           setTelemetry(data.telemetry);
+
+          // Update contact state from telemetry metadata
+          setContactState({
+            inContact: data.telemetry.in_contact || false,
+            source: data.telemetry.source || 'LIVE',
+            station: data.telemetry.contact_station || null,
+            elevationDeg: data.telemetry.contact_elevation_deg || 0,
+            blackoutSec: data.telemetry.blackout_duration_sec || 0,
+          });
         }
 
         if (data.alerts && data.alerts.length > 0) {
@@ -63,5 +99,9 @@ export function useWebSocket(url) {
     setAlerts([]);
   }, []);
 
-  return { telemetry, alerts, connected, clearAlerts };
+  const clearBufferDump = useCallback(() => {
+    setBufferDump(null);
+  }, []);
+
+  return { telemetry, alerts, connected, contactState, bufferDump, clearAlerts, clearBufferDump };
 }

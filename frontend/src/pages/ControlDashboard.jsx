@@ -34,11 +34,12 @@ function DragHandle({ axis, onDrag, className }) {
   );
 }
 
-export default function ControlDashboard({ telemetry, alerts }) {
+export default function ControlDashboard({ telemetry, alerts, contactState, bufferDump, clearBufferDump }) {
   const containerRef = useRef(null);
   const [globeW, setGlobeW] = useState(null);
   const [sidebarW, setSidebarW] = useState(340);
   const [stripH, setStripH] = useState(210);
+  const [groundNetworkVersion, setGroundNetworkVersion] = useState(0);
   const startRef = useRef({});
 
   const onDragGlobe = useCallback((dx) => {
@@ -81,19 +82,19 @@ export default function ControlDashboard({ telemetry, alerts }) {
   return (
     <div className="dashboard-layout control-layout" ref={containerRef} style={controlStyle}>
       <div className="control-globe" style={{ gridArea: 'globe' }}>
-        <CesiumGlobe telemetry={telemetry} />
+        <CesiumGlobe telemetry={telemetry} groundNetworkVersion={groundNetworkVersion} />
       </div>
       <DragHandle axis="x" onDrag={onDragGlobe} className="hg1" />
       <div className="control-map" style={{ gridArea: 'map' }}>
-        <GroundTrack2D telemetry={telemetry} />
+        <GroundTrack2D telemetry={telemetry} groundNetworkVersion={groundNetworkVersion} />
       </div>
       <DragHandle axis="x" onDrag={onDragSidebar} className="hg2" />
       <div className="control-sidebar" style={{ gridArea: 'sidebar' }}>
-        <TelemetrySidebar telemetry={telemetry} />
+        <TelemetrySidebar telemetry={telemetry} contactState={contactState} />
       </div>
       <DragHandle axis="y" onDrag={onDragStrip} className="hrow" />
       <div className="control-strip-area" style={{ gridArea: 'strip' }}>
-        <ControlStrip alerts={alerts} />
+        <ControlStrip alerts={alerts} contactState={contactState} bufferDump={bufferDump} clearBufferDump={clearBufferDump} />
       </div>
     </div>
   );

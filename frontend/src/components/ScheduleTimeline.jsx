@@ -9,14 +9,6 @@ const AXIS_HEIGHT = 28;
 const MIN_PX_PER_HOUR = 40;
 const MAX_PX_PER_HOUR = 600;
 
-const STATION_ORDER = [
-  'ISTRAC Bangalore',
-  'ISRO Lucknow',
-  'Svalbard SvalSat',
-  'KSAT Tromso',
-  'NASA Wallops',
-];
-
 const TASK_COLORS = {
   IMAGING: { bg: 'rgba(34,197,94,0.25)', border: '#22c55e', text: '#4ade80' },
   DOWNLINK: { bg: 'rgba(249,115,22,0.25)', border: '#f97316', text: '#fb923c' },
@@ -101,9 +93,14 @@ export default function ScheduleTimeline({ passes = [], tasks = [] }) {
     }
   }, [dragging, handleMouseMove, handleMouseUp]);
 
+  // Derive station list from passes data
+  const stationSet = new Set();
+  passes.forEach(p => { if (p.station_name) stationSet.add(p.station_name); });
+  const stationOrder = Array.from(stationSet).sort();
+
   // Group passes by station
   const stationPasses = {};
-  STATION_ORDER.forEach(s => { stationPasses[s] = []; });
+  stationOrder.forEach(s => { stationPasses[s] = []; });
   passes.forEach(p => {
     const key = p.station_name;
     if (stationPasses[key]) stationPasses[key].push(p);
@@ -132,7 +129,7 @@ export default function ScheduleTimeline({ passes = [], tasks = [] }) {
 
   const ticks = generateTicks();
   const nowX = timeToX(now);
-  const totalRows = 1 + STATION_ORDER.length; // tasks row + station rows
+  const totalRows = 1 + stationOrder.length; // tasks row + station rows
 
   // Jump to NOW
   const jumpToNow = () => {
@@ -162,7 +159,7 @@ export default function ScheduleTimeline({ passes = [], tasks = [] }) {
             <span className="tl-label-dot" style={{ background: '#22c55e' }} />
             TASKS
           </div>
-          {STATION_ORDER.map(station => (
+          {stationOrder.map(station => (
             <div className="timeline-label-row" key={station} style={{ height: ROW_HEIGHT }}>
               <span className="tl-label-dot" style={{ background: '#3b82f6' }} />
               {station.split(' ').pop()}
@@ -218,7 +215,7 @@ export default function ScheduleTimeline({ passes = [], tasks = [] }) {
           </div>
 
           {/* Station rows */}
-          {STATION_ORDER.map(station => (
+          {stationOrder.map(station => (
             <div className="timeline-row" key={station} style={{ height: ROW_HEIGHT }}>
               {(stationPasses[station] || []).map((p, i) => {
                 const left = timeToX(p.aos_time);

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Satellite, Monitor, Send, ShieldAlert, RotateCcw } from 'lucide-react';
+import { Satellite, Monitor, Send, ShieldAlert, RotateCcw, Globe } from 'lucide-react';
 
 function Clock() {
   const [time, setTime] = useState(new Date());
@@ -16,7 +16,8 @@ function Clock() {
 
 const TABS = [
   { key: 'control', label: 'CONTROL', icon: Monitor },
-  { key: 'fdir', label: 'FDIR', icon: ShieldAlert },
+  { key: 'flight', label: 'FLIGHT', icon: Globe },
+  { key: 'fdir', label: 'MONITOR', icon: ShieldAlert },
   { key: 'schedule', label: 'SCHEDULE', icon: Send },
 ];
 

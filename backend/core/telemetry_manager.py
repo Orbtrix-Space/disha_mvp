@@ -41,10 +41,10 @@ class ConnectionManager:
         return len(self.active_connections)
 
 
-def build_telemetry_frame(state: dict, fdir_alerts: list = None) -> dict:
+def build_telemetry_frame(state: dict, fdir_alerts: list = None, source: str = "LIVE") -> dict:
     """
     Build telemetry frame from Mission State dict for WebSocket broadcast.
-    Structured per spec: position, velocity, power, thermal, comms, attitude, storage.
+    source: "LIVE" (during ground contact) or "PREDICTED" (during blackout).
     """
     pos = state.get("position", [0, 0, 0])
     vel = state.get("velocity", [0, 0, 0])
@@ -118,6 +118,13 @@ def build_telemetry_frame(state: dict, fdir_alerts: list = None) -> dict:
         "pointing_error": state.get("pointing_error", 0.1),
         "angular_rate": state.get("angular_rate", 0.01),
         "mode": state.get("link_status", "NOMINAL") == "NOMINAL" and "NOMINAL" or "DEGRADED",
+        # Contact & source metadata
+        "source": source,
+        "in_contact": state.get("in_contact", True),
+        "contact_station": state.get("contact_station"),
+        "contact_elevation_deg": state.get("contact_elevation_deg", 0.0),
+        "blackout_duration_sec": state.get("blackout_duration_sec", 0.0),
+        "satellite_name": state.get("satellite_name", "SIM-SAT"),
     }
 
     return frame

@@ -6,7 +6,7 @@ import { api } from '../services/api';
 // No Ion token
 Cesium.Ion.defaultAccessToken = undefined;
 
-export default function CesiumGlobe({ telemetry }) {
+export default function CesiumGlobe({ telemetry, groundNetworkVersion }) {
   const containerRef = useRef(null);
   const viewerRef = useRef(null);
   const entityRef = useRef(null);
@@ -14,7 +14,48 @@ export default function CesiumGlobe({ telemetry }) {
   const groundTrackRef = useRef(null);
   const [tracking, setTracking] = useState(false);
   const [inEclipse, setInEclipse] = useState(false);
-  const stationsAddedRef = useRef(false);
+  const stationEntitiesRef = useRef([]);
+  const currentSatRef = useRef(null);
+  const orbitFetchTimerRef = useRef(null);
+
+  const loadStationMarkers = useCallback((viewer) => {
+    if (!viewer) viewer = viewerRef.current;
+    if (!viewer) return;
+    // Remove old station markers
+    stationEntitiesRef.current.forEach((e) => {
+      try { viewer.entities.remove(e); } catch (_) {}
+    });
+    stationEntitiesRef.current = [];
+    // Fetch and add new ones
+    api.getGroundStations().then((data) => {
+      if (!data || !data.stations || !viewerRef.current) return;
+      data.stations.forEach((gs) => {
+        const entity = viewerRef.current.entities.add({
+          name: gs.name,
+          position: Cesium.Cartesian3.fromDegrees(gs.lon, gs.lat, 0),
+          point: {
+            pixelSize: 7,
+            color: Cesium.Color.fromCssColorString('#ff6b35'),
+            outlineColor: Cesium.Color.fromCssColorString('#ff6b35').withAlpha(0.4),
+            outlineWidth: 3,
+          },
+          label: {
+            text: gs.name,
+            font: '10px JetBrains Mono, monospace',
+            fillColor: Cesium.Color.fromCssColorString('#ff6b35'),
+            style: Cesium.LabelStyle.FILL,
+            verticalOrigin: Cesium.VerticalOrigin.TOP,
+            pixelOffset: new Cesium.Cartesian2(0, 10),
+            showBackground: true,
+            backgroundColor: Cesium.Color.BLACK.withAlpha(0.5),
+            backgroundPadding: new Cesium.Cartesian2(4, 3),
+            scale: 0.9,
+          },
+        });
+        stationEntitiesRef.current.push(entity);
+      });
+    });
+  }, []);
 
   // Initialize Cesium viewer
   useEffect(() => {
@@ -89,7 +130,7 @@ export default function CesiumGlobe({ telemetry }) {
 
     // Satellite entity
     entityRef.current = viewer.entities.add({
-      name: 'DISHA-SAT-01',
+      name: 'SIM-SAT',
       position: Cesium.Cartesian3.fromDegrees(78, 20, 622000),
       point: {
         pixelSize: 10,
@@ -98,7 +139,7 @@ export default function CesiumGlobe({ telemetry }) {
         outlineWidth: 1,
       },
       label: {
-        text: 'DISHA-SAT-01',
+        text: 'SIM-SAT',
         font: '11px JetBrains Mono, monospace',
         fillColor: Cesium.Color.fromCssColorString('#0ea5e9'),
         style: Cesium.LabelStyle.FILL,
@@ -142,43 +183,21 @@ export default function CesiumGlobe({ telemetry }) {
 
     viewerRef.current = viewer;
 
-    // Add ground station markers
-    if (!stationsAddedRef.current) {
-      stationsAddedRef.current = true;
-      api.getGroundStations().then((data) => {
-        if (!data || !data.stations || !viewerRef.current) return;
-        data.stations.forEach((gs) => {
-          viewerRef.current.entities.add({
-            name: gs.name,
-            position: Cesium.Cartesian3.fromDegrees(gs.lon, gs.lat, 0),
-            point: {
-              pixelSize: 7,
-              color: Cesium.Color.fromCssColorString('#ff6b35'),
-              outlineColor: Cesium.Color.fromCssColorString('#ff6b35').withAlpha(0.4),
-              outlineWidth: 3,
-            },
-            label: {
-              text: gs.name,
-              font: '10px JetBrains Mono, monospace',
-              fillColor: Cesium.Color.fromCssColorString('#ff6b35'),
-              style: Cesium.LabelStyle.FILL,
-              verticalOrigin: Cesium.VerticalOrigin.TOP,
-              pixelOffset: new Cesium.Cartesian2(0, 10),
-              showBackground: true,
-              backgroundColor: Cesium.Color.BLACK.withAlpha(0.5),
-              backgroundPadding: new Cesium.Cartesian2(4, 3),
-              scale: 0.9,
-            },
-          });
-        });
-      });
-    }
+    // Load ground station markers
+    loadStationMarkers(viewer);
 
     return () => {
       viewer.destroy();
       viewerRef.current = null;
     };
   }, []);
+
+  // Reload station markers when ground network changes
+  useEffect(() => {
+    if (groundNetworkVersion && viewerRef.current) {
+      loadStationMarkers();
+    }
+  }, [groundNetworkVersion, loadStationMarkers]);
 
   // Update satellite position
   useEffect(() => {
@@ -189,6 +208,37 @@ export default function CesiumGlobe({ telemetry }) {
       longitude, latitude, altitude_km * 1000
     );
     entityRef.current.position = pos;
+
+    // Update satellite name from TLE data
+    const satName = telemetry.satellite_name || 'SIM-SAT';
+    const satChanged = currentSatRef.current && currentSatRef.current !== satName;
+    currentSatRef.current = satName;
+    entityRef.current.name = satName;
+    if (entityRef.current.label) {
+      entityRef.current.label.text = satName;
+    }
+
+    // New satellite loaded — clear old orbit lines and re-fetch
+    if (satChanged) {
+      if (orbitLineRef.current) {
+        orbitLineRef.current.polyline.positions = [];
+      }
+      if (groundTrackRef.current) {
+        groundTrackRef.current.polyline.positions = [];
+      }
+      // Re-fetch orbit prediction for new satellite
+      api.getOrbitPrediction().then((data) => {
+        if (!data || !data.points) return;
+        const positions = [];
+        const groundPositions = [];
+        for (const p of data.points) {
+          positions.push(Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt_km * 1000));
+          groundPositions.push(Cesium.Cartesian3.fromDegrees(p.lon, p.lat, 0));
+        }
+        if (orbitLineRef.current) orbitLineRef.current.polyline.positions = positions;
+        if (groundTrackRef.current) groundTrackRef.current.polyline.positions = groundPositions;
+      });
+    }
 
     // Eclipse detection: check if satellite is in Earth's shadow
     if (viewerRef.current) {

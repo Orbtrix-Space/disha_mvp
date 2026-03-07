@@ -130,6 +130,46 @@ export const api = {
     }
   },
 
+  getGroundNetworks: async () => {
+    try {
+      const response = await client.get('/flight/ground-networks');
+      return response.data;
+    } catch (error) {
+      console.error("Ground Networks Error:", error.message);
+      return null;
+    }
+  },
+
+  setGroundStations: async (network) => {
+    try {
+      const response = await client.post('/flight/ground-stations/set', { network });
+      return response.data;
+    } catch (error) {
+      console.error("Set Ground Stations Error:", error.message);
+      return null;
+    }
+  },
+
+  addCustomStation: async (name, lat, lon) => {
+    try {
+      const response = await client.post('/flight/ground-stations/add', { name, lat, lon });
+      return response.data;
+    } catch (error) {
+      console.error("Add Station Error:", error.message);
+      return null;
+    }
+  },
+
+  removeStation: async (name) => {
+    try {
+      const response = await client.post('/flight/ground-stations/remove', { name });
+      return response.data;
+    } catch (error) {
+      console.error("Remove Station Error:", error.message);
+      return null;
+    }
+  },
+
   getPowerPrediction: async () => {
     try {
       const response = await client.get('/power/prediction');

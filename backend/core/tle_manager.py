@@ -3,6 +3,7 @@ DISHA Beta — TLE Manager
 Fetch TLE from CelesTrak, parse, cache. SGP4 propagation.
 """
 
+import asyncio
 import httpx
 from sgp4.api import Satrec, WGS72
 from sgp4.api import jday
@@ -18,14 +19,19 @@ class TLEManager:
         self.norad_id = None
         self.fetch_time = None
 
+    def _fetch_tle_sync(self, norad_id: int) -> str:
+        """Sync HTTP fetch — httpx.AsyncClient has connectivity issues on Windows."""
+        url = f"https://celestrak.org/NORAD/elements/gp.php?CATNR={norad_id}&FORMAT=TLE"
+        resp = httpx.get(url, timeout=15.0)
+        resp.raise_for_status()
+        return resp.text
+
     async def fetch_tle(self, norad_id: int) -> dict:
         """Fetch TLE from CelesTrak GP API by NORAD ID."""
-        url = f"https://celestrak.org/NORAD/elements/gp.php?CATNR={norad_id}&FORMAT=TLE"
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(url, timeout=10.0)
-            resp.raise_for_status()
+        loop = asyncio.get_event_loop()
+        text = await loop.run_in_executor(None, self._fetch_tle_sync, norad_id)
 
-        lines = resp.text.strip().split('\n')
+        lines = text.strip().split('\n')
         if len(lines) < 3:
             raise ValueError(f"Invalid TLE response for NORAD ID {norad_id}")
 

@@ -65,8 +65,10 @@ class CommandEngine:
                 command = {
                     "command_id": f"CMD-{uuid.uuid4().hex[:8]}",
                     "task_id": task_id,
+                    "command": cmd_template["type"],
                     "command_type": cmd_template["type"],
                     "description": cmd_template["description"],
+                    "delay_sec": i * 5,
                     "parameters": {
                         "task_action": action,
                         "sequence_order": i + 1,
@@ -79,6 +81,7 @@ class CommandEngine:
         sequence = {
             "sequence_id": sequence_id,
             "plan_id": plan_id,
+            "status": "PENDING",
             "commands": commands,
             "total_commands": len(commands),
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -100,6 +103,7 @@ class CommandEngine:
         if seq["approved"]:
             return {"status": "ERROR", "message": "Sequence already approved"}
 
+        seq["status"] = "APPROVED"
         seq["approved"] = True
         seq["approved_by"] = operator
         seq["approved_at"] = datetime.now(timezone.utc).isoformat()

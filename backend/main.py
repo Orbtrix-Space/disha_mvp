@@ -17,7 +17,7 @@ from backend.core.fdir_engine import FDIREngine
 from backend.core.constraint_engine import evaluate_constraints
 from backend.core.autonomy_manager import AutonomyManager
 from backend.core.command_engine import CommandEngine
-from backend.core.ground_stations import GroundStationPassPredictor
+from backend.core.ground_stations import GroundStationPassPredictor, check_contact_now
 from backend.core.telemetry_manager import ConnectionManager, build_telemetry_frame
 
 
@@ -62,32 +62,73 @@ def reset_state():
 # ====================================================
 
 async def telemetry_loop():
-    """Background task: tick state + build telemetry + broadcast at 1 Hz."""
+    """Background task: tick state + contact-aware telemetry at 1 Hz.
+
+    - Simulation always runs (satellite keeps moving regardless of contact).
+    - During CONTACT: send live telemetry + dump stored blackout buffer.
+    - During BLACKOUT: buffer telemetry onboard, send predicted state to frontend.
+    """
     while True:
         try:
-            # 1. Advance simulation by 1 second
+            # 1. Advance simulation by 1 second (always runs)
             satellite.tick(dt_seconds=1.0)
             raw_state = satellite.get_state()
 
-            # 2. FDIR evaluation (self-clearing)
+            # 2. Check ground station contact
+            contact = check_contact_now(
+                satellite.position.tolist(), satellite.current_time
+            )
+            contact_acquired = satellite.update_contact(
+                contact["in_contact"], contact["station"], contact["elevation_deg"]
+            )
+            # Re-get state after contact update (comms fields changed)
+            raw_state = satellite.get_state()
+
+            # 3. FDIR evaluation (always runs — satellite monitors itself)
             alerts = fdir_engine.evaluate(raw_state)
 
-            # 3. Constraint engine
+            # 4. Constraint + Autonomy (always runs)
             constraint_result = evaluate_constraints(raw_state)
             intelligence_cache["constraints"] = constraint_result
-
-            # 4. Autonomy manager
             autonomy_result = autonomy_manager.evaluate(raw_state, constraint_result)
             intelligence_cache["autonomy"] = autonomy_result
 
-            # 5. Build telemetry frame
-            frame = build_telemetry_frame(raw_state, alerts)
+            if contact["in_contact"]:
+                # === IN CONTACT: send live telemetry ===
 
-            # 6. Broadcast to all WebSocket clients
-            await ws_manager.broadcast({
-                "telemetry": frame,
-                "alerts": alerts,
-            })
+                # If contact was just acquired, dump the blackout buffer first
+                if contact_acquired:
+                    buffer = satellite.dump_buffer()
+                    if buffer:
+                        await ws_manager.broadcast({
+                            "type": "buffer_dump",
+                            "frames": [
+                                build_telemetry_frame(s, source="BUFFERED")
+                                for s in buffer
+                            ],
+                            "count": len(buffer),
+                        })
+                        print(f"[CONTACT] {contact['station']} — dumped {len(buffer)} buffered frames")
+
+                # Send live telemetry
+                frame = build_telemetry_frame(raw_state, alerts, source="LIVE")
+                await ws_manager.broadcast({
+                    "type": "telemetry",
+                    "telemetry": frame,
+                    "alerts": alerts,
+                })
+            else:
+                # === BLACKOUT: buffer onboard, send predicted to frontend ===
+                satellite.buffer_telemetry(raw_state)
+
+                # Send predicted frame so the frontend isn't blind
+                frame = build_telemetry_frame(raw_state, alerts, source="PREDICTED")
+                await ws_manager.broadcast({
+                    "type": "telemetry",
+                    "telemetry": frame,
+                    "alerts": alerts,
+                })
+
         except Exception as e:
             print(f"[TELEMETRY LOOP ERROR] {e}")
         await asyncio.sleep(1.0)

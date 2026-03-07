@@ -85,6 +85,17 @@ class MissionState:
         # TLE manager reference
         self.tle_manager = None
 
+        # Contact state (ground station visibility)
+        self.in_contact = False
+        self.contact_station = None
+        self.contact_elevation_deg = 0.0
+        self.last_contact_time = None
+        self.blackout_duration_sec = 0.0
+
+        # Onboard telemetry buffer (stored during blackout, dumped on contact)
+        self.onboard_buffer = []
+        self.onboard_buffer_max = 5400  # ~90 min at 1 Hz
+
         # Legacy compatibility
         self.MAX_BATTERY_WH = self.battery_capacity_wh
         self.MAX_STORAGE_GB = self.storage_capacity_mb / 1024.0
@@ -165,18 +176,22 @@ class MissionState:
         self.battery_temp = max(-10, min(55, self.battery_temp))
 
     def _update_comms(self, dt: float):
-        """Update comms state based on proximity to ground stations."""
-        self.snr_db = 15.0 + 3.0 * random.uniform(-1, 1)
-
-        if self.snr_db < 5:
-            self.link_status = "LOST"
-            self.data_rate_kbps = 0.0
-        elif self.snr_db < 8:
-            self.link_status = "DEGRADED"
-            self.data_rate_kbps = 64.0
+        """Update comms state based on actual ground station contact."""
+        if self.in_contact:
+            # In contact: SNR based on elevation (higher elevation = better signal)
+            base_snr = 8.0 + (self.contact_elevation_deg / 90.0) * 12.0
+            self.snr_db = base_snr + random.uniform(-0.5, 0.5)
+            if self.snr_db >= 12:
+                self.link_status = "NOMINAL"
+                self.data_rate_kbps = 256.0
+            else:
+                self.link_status = "DEGRADED"
+                self.data_rate_kbps = 64.0
         else:
-            self.link_status = "NOMINAL"
-            self.data_rate_kbps = 256.0
+            # Blackout: no signal
+            self.snr_db = 0.0
+            self.link_status = "NO_CONTACT"
+            self.data_rate_kbps = 0.0
 
     def _update_storage(self, dt: float):
         """Update storage fill based on operations."""
@@ -234,7 +249,46 @@ class MissionState:
             "angular_rate": round(self.angular_rate, 4),
             # Payload
             "payload_status": self.payload_status,
+            # Contact
+            "in_contact": self.in_contact,
+            "contact_station": self.contact_station,
+            "contact_elevation_deg": self.contact_elevation_deg,
+            "blackout_duration_sec": self.blackout_duration_sec,
+            # Satellite identity
+            "satellite_name": self.tle_manager.satellite_name if self.tle_manager and self.tle_manager.satellite_name else "SIM-SAT",
         }
+
+    def update_contact(self, in_contact: bool, station: str = None, elevation: float = 0.0):
+        """Update ground station contact state and refresh comms accordingly."""
+        was_in_contact = self.in_contact
+        self.in_contact = in_contact
+        self.contact_station = station
+        self.contact_elevation_deg = elevation
+
+        if in_contact:
+            self.last_contact_time = self.current_time
+            self.blackout_duration_sec = 0.0
+            self.nearest_station = station or self.nearest_station
+        else:
+            self.blackout_duration_sec += 1.0
+
+        # Refresh comms state to match contact
+        self._update_comms(0)
+
+        # Return whether contact was just acquired (for buffer dump)
+        return in_contact and not was_in_contact
+
+    def buffer_telemetry(self, state_snapshot: dict):
+        """Store a telemetry snapshot in onboard buffer (during blackout)."""
+        self.onboard_buffer.append(state_snapshot)
+        if len(self.onboard_buffer) > self.onboard_buffer_max:
+            self.onboard_buffer.pop(0)
+
+    def dump_buffer(self) -> list:
+        """Dump and clear the onboard telemetry buffer (on contact acquisition)."""
+        data = list(self.onboard_buffer)
+        self.onboard_buffer.clear()
+        return data
 
     def update_state(self, power_cost_wh: float, data_cost_gb: float):
         """Deduct power and add storage from task execution."""

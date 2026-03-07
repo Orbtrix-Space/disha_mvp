@@ -3,21 +3,60 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { api } from '../services/api';
 
-const STATION_COLORS = {
-  'ISTRAC Bangalore': '#00d4ff',
-  'ISRO Lucknow': '#00ff88',
-  'Svalbard SvalSat': '#ff6b35',
-  'KSAT Tromso': '#ffd700',
-  'NASA Wallops': '#ff4081',
-};
+function getStationColor(name) {
+  if (name.startsWith('ISTRAC')) return '#00d4ff';
+  if (name.startsWith('ESTRACK')) return '#a855f7';
+  if (name.includes('DSN') || name.startsWith('Wallops') || name.startsWith('White Sands') || name.startsWith('McMurdo')) return '#ff4081';
+  if (name.startsWith('KSAT') || name.startsWith('SvalSat')) return '#ffd700';
+  if (name.startsWith('Custom')) return '#22c55e';
+  return '#ff6b35';
+}
 
-export default function GroundTrack2D({ telemetry }) {
+function loadStationsToMap(map, layerGroup) {
+  const layer = layerGroup || map._stationLayer;
+  if (!layer) return;
+  layer.clearLayers();
+  api.getGroundStations().then((data) => {
+    if (!data || !data.stations) return;
+    data.stations.forEach((gs) => {
+      const lat = gs.lat ?? gs.latitude;
+      const lon = gs.lon ?? gs.longitude;
+      const color = getStationColor(gs.name);
+      const gsIcon = L.divIcon({
+        className: 'gs-marker-2d',
+        html: `<div style="width:8px;height:8px;border-radius:50%;background:${color};box-shadow:0 0 6px ${color};"></div>`,
+        iconSize: [8, 8],
+        iconAnchor: [4, 4],
+      });
+      L.marker([lat, lon], { icon: gsIcon })
+        .bindTooltip(gs.name, {
+          permanent: false,
+          direction: 'top',
+          className: 'gs-tooltip-2d',
+          offset: [0, -6],
+        })
+        .addTo(layer);
+
+      L.circle([lat, lon], {
+        radius: 1500000,
+        color: color,
+        weight: 0.5,
+        opacity: 0.2,
+        fill: true,
+        fillColor: color,
+        fillOpacity: 0.03,
+      }).addTo(layer);
+    });
+  });
+}
+
+export default function GroundTrack2D({ telemetry, groundNetworkVersion }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const satMarkerRef = useRef(null);
   const trailLineRef = useRef(null);
   const trailRef = useRef([]);
-  const stationsAddedRef = useRef(false);
+  const stationLayerRef = useRef(null);
 
   // Initialize Leaflet map
   useEffect(() => {
@@ -61,41 +100,9 @@ export default function GroundTrack2D({ telemetry }) {
 
     mapRef.current = map;
 
-    // Add ground stations
-    if (!stationsAddedRef.current) {
-      stationsAddedRef.current = true;
-      api.getGroundStations().then((data) => {
-        if (!data || !data.stations || !mapRef.current) return;
-        data.stations.forEach((gs) => {
-          const color = STATION_COLORS[gs.name] || '#888';
-          const gsIcon = L.divIcon({
-            className: 'gs-marker-2d',
-            html: `<div style="width:8px;height:8px;border-radius:50%;background:${color};box-shadow:0 0 6px ${color};"></div>`,
-            iconSize: [8, 8],
-            iconAnchor: [4, 4],
-          });
-          L.marker([gs.latitude, gs.longitude], { icon: gsIcon })
-            .bindTooltip(gs.name, {
-              permanent: false,
-              direction: 'top',
-              className: 'gs-tooltip-2d',
-              offset: [0, -6],
-            })
-            .addTo(mapRef.current);
-
-          // Range circle (~1500km rough visibility)
-          L.circle([gs.latitude, gs.longitude], {
-            radius: 1500000,
-            color: color,
-            weight: 0.5,
-            opacity: 0.2,
-            fill: true,
-            fillColor: color,
-            fillOpacity: 0.03,
-          }).addTo(mapRef.current);
-        });
-      });
-    }
+    // Add ground stations (initial load)
+    stationLayerRef.current = L.layerGroup().addTo(map);
+    loadStationsToMap(map, stationLayerRef.current);
 
     return () => {
       map.remove();
@@ -136,6 +143,13 @@ export default function GroundTrack2D({ telemetry }) {
       }
     }
   }, [telemetry]);
+
+  // Reload stations when network changes
+  useEffect(() => {
+    if (groundNetworkVersion && mapRef.current && stationLayerRef.current) {
+      loadStationsToMap(mapRef.current, stationLayerRef.current);
+    }
+  }, [groundNetworkVersion]);
 
   // Handle container resize
   useEffect(() => {

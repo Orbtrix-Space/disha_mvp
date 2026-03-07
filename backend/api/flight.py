@@ -6,7 +6,7 @@ GET /orbit/prediction, GET /flight/orbital-elements, GET /flight/passes, GET /fl
 from datetime import timedelta
 from fastapi import APIRouter
 from backend.core.flight_dynamics import propagate_orbit, eci_to_ecef, ecef_to_lla, state_to_keplerian
-from backend.core.ground_stations import get_ground_stations
+from backend.core.ground_stations import get_ground_stations, set_ground_stations, get_available_networks, get_active_network, add_custom_station, remove_station
 
 router = APIRouter(tags=["Flight"])
 
@@ -76,4 +76,43 @@ def get_passes():
 @router.get("/flight/ground-stations")
 def get_ground_stations_endpoint():
     stations = get_ground_stations()
-    return {"stations": stations}
+    return {"stations": stations, "network": get_active_network()}
+
+
+@router.get("/flight/ground-networks")
+def get_ground_networks():
+    return {"networks": get_available_networks(), "active": get_active_network()}
+
+
+@router.post("/flight/ground-stations/set")
+def set_ground_stations_endpoint(payload: dict):
+    network = payload.get("network")
+    stations = payload.get("stations")
+    result = set_ground_stations(network=network, stations=stations)
+    if result["status"] == "SUCCESS":
+        result["stations"] = get_ground_stations()
+    return result
+
+
+@router.post("/flight/ground-stations/add")
+def add_ground_station_endpoint(payload: dict):
+    name = payload.get("name", "Custom Station")
+    lat = payload.get("lat")
+    lon = payload.get("lon")
+    if lat is None or lon is None:
+        return {"status": "ERROR", "message": "lat and lon are required"}
+    alt_m = payload.get("alt_m", 0)
+    min_elev = payload.get("min_elevation_deg", 5)
+    result = add_custom_station(name, float(lat), float(lon), float(alt_m), float(min_elev))
+    result["stations"] = get_ground_stations()
+    return result
+
+
+@router.post("/flight/ground-stations/remove")
+def remove_ground_station_endpoint(payload: dict):
+    name = payload.get("name")
+    if not name:
+        return {"status": "ERROR", "message": "name is required"}
+    result = remove_station(name)
+    result["stations"] = get_ground_stations()
+    return result

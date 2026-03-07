@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Terminal, AlertTriangle, Radio, Clock, ChevronRight,
-  Send, Zap, Info, AlertCircle,
+  Send, Zap, Info, AlertCircle, Download, Satellite,
 } from 'lucide-react';
 import { api } from '../services/api';
 
@@ -36,10 +36,11 @@ function formatUTC(date) {
 /* ════════════════════════════════════════
    EVENT LOG PANEL
    ════════════════════════════════════════ */
-function EventLog({ alerts }) {
+function EventLog({ alerts, contactState, bufferDump, clearBufferDump }) {
   const logRef = useRef(null);
   const [events, setEvents] = useState([]);
   const seenRef = useRef(new Set());
+  const prevContactRef = useRef(null);
 
   // Merge FDIR alerts into event stream
   useEffect(() => {
@@ -62,6 +63,46 @@ function EventLog({ alerts }) {
     }
   }, [alerts]);
 
+  // Track contact transitions
+  useEffect(() => {
+    if (!contactState) return;
+    const prev = prevContactRef.current;
+    prevContactRef.current = contactState.inContact;
+
+    if (prev === null) return; // Skip first render
+
+    if (contactState.inContact && !prev) {
+      setEvents(ev => [{
+        id: `contact-aos-${Date.now()}`,
+        time: new Date(),
+        severity: 'SYSTEM',
+        subsystem: 'COMMS',
+        message: `AOS — Contact acquired: ${contactState.station} (${contactState.elevationDeg}\u00B0)`,
+      }, ...ev].slice(0, 200));
+    } else if (!contactState.inContact && prev) {
+      setEvents(ev => [{
+        id: `contact-los-${Date.now()}`,
+        time: new Date(),
+        severity: 'SYSTEM',
+        subsystem: 'COMMS',
+        message: 'LOS — Signal lost, entering blackout. Telemetry is now PREDICTED.',
+      }, ...ev].slice(0, 200));
+    }
+  }, [contactState]);
+
+  // Buffer dump events
+  useEffect(() => {
+    if (!bufferDump) return;
+    setEvents(ev => [{
+      id: `dump-${bufferDump.receivedAt}`,
+      time: new Date(),
+      severity: 'CMD',
+      subsystem: 'DATA',
+      message: `Buffer dump received: ${bufferDump.count} stored frames from blackout period`,
+    }, ...ev].slice(0, 200));
+    if (clearBufferDump) clearBufferDump();
+  }, [bufferDump, clearBufferDump]);
+
   // System boot event
   useEffect(() => {
     setEvents(prev => [{
@@ -69,7 +110,7 @@ function EventLog({ alerts }) {
       time: new Date(),
       severity: 'SYSTEM',
       subsystem: 'CORE',
-      message: 'Telemetry link established — streaming at 1 Hz',
+      message: 'Mission control online — awaiting ground station contact',
     }, ...prev]);
   }, []);
 
@@ -213,14 +254,20 @@ function CommandTerminal() {
 /* ════════════════════════════════════════
    PASS COUNTDOWN
    ════════════════════════════════════════ */
-function PassCountdown() {
+function PassCountdown({ contactState }) {
   const [passes, setPasses] = useState([]);
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
-    api.getGroundStationPasses().then(data => {
-      if (data && data.passes) setPasses(data.passes);
-    });
+    const fetchPasses = () => {
+      api.getGroundStationPasses().then(data => {
+        if (data && data.passes) setPasses(data.passes);
+      });
+    };
+    fetchPasses();
+    // Refresh pass predictions periodically
+    const id = setInterval(fetchPasses, 60000);
+    return () => clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -228,16 +275,12 @@ function PassCountdown() {
     return () => clearInterval(id);
   }, []);
 
-  // Find next upcoming pass
-  const nextPass = passes.find(p => new Date(p.aos_time).getTime() > now);
-  const currentPass = passes.find(p => {
-    const aos = new Date(p.aos_time).getTime();
-    const los = new Date(p.los_time).getTime();
-    return now >= aos && now <= los;
-  });
+  // Use live contact state from backend if available
+  const liveContact = contactState?.inContact || false;
+  const liveStation = contactState?.station;
 
-  const active = currentPass || null;
-  const upcoming = nextPass || null;
+  // Find next upcoming pass from predictions
+  const nextPass = passes.find(p => new Date(p.aos_time).getTime() > now);
 
   const formatCountdown = (targetMs) => {
     const diff = Math.max(0, targetMs - now);
@@ -247,53 +290,56 @@ function PassCountdown() {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
+  const formatBlackout = (sec) => {
+    if (!sec || sec <= 0) return '--:--:--';
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = Math.round(sec % 60);
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
   return (
     <div className="cs-panel cs-pass">
       <div className="cs-panel-header">
-        <Radio size={12} /> NEXT PASS
+        <Radio size={12} /> GROUND CONTACT
       </div>
 
-      {active ? (
+      {liveContact ? (
         <div className="cs-pass-body">
           <div className="cs-pass-status active">
             <div className="cs-pass-dot active" />
             IN CONTACT
           </div>
-          <div className="cs-pass-station">{active.station_name}</div>
-          <div className="cs-pass-countdown">
-            {formatCountdown(new Date(active.los_time).getTime())}
+          <div className="cs-pass-station">
+            <Satellite size={11} style={{ marginRight: 4, verticalAlign: -1 }} />
+            {liveStation}
           </div>
-          <div className="cs-pass-label">LOS IN</div>
-          <div className="cs-pass-meta">
-            <span>Elev: {active.max_elevation_deg}°</span>
-            <span>Dur: {Math.round(active.duration_sec / 60)}m</span>
-          </div>
-        </div>
-      ) : upcoming ? (
-        <div className="cs-pass-body">
-          <div className="cs-pass-status waiting">
-            <div className="cs-pass-dot waiting" />
-            WAITING
-          </div>
-          <div className="cs-pass-station">{upcoming.station_name}</div>
-          <div className="cs-pass-countdown">
-            {formatCountdown(new Date(upcoming.aos_time).getTime())}
-          </div>
-          <div className="cs-pass-label">TIME TO AOS</div>
-          <div className="cs-pass-meta">
-            <span>Elev: {upcoming.max_elevation_deg}°</span>
-            <span>Dur: {Math.round(upcoming.duration_sec / 60)}m</span>
+          <div className="cs-pass-meta" style={{ marginTop: 6 }}>
+            <span>Elev: {contactState?.elevationDeg}°</span>
+            <span>Source: LIVE</span>
           </div>
         </div>
       ) : (
         <div className="cs-pass-body">
-          <div className="cs-pass-status waiting">
-            <div className="cs-pass-dot waiting" />
-            NO PASSES
+          <div className="cs-pass-status blackout">
+            <div className="cs-pass-dot blackout" />
+            BLACKOUT
           </div>
-          <div className="cs-pass-station">—</div>
-          <div className="cs-pass-countdown">--:--:--</div>
-          <div className="cs-pass-label">LOADING...</div>
+          <div className="cs-pass-countdown blackout-timer">
+            {formatBlackout(contactState?.blackoutSec)}
+          </div>
+          <div className="cs-pass-label">BLACKOUT DURATION</div>
+          {nextPass && (
+            <>
+              <div className="cs-pass-station" style={{ marginTop: 8, fontSize: '0.65rem', opacity: 0.7 }}>
+                Next: {nextPass.station_name}
+              </div>
+              <div className="cs-pass-countdown" style={{ fontSize: '0.9rem' }}>
+                {formatCountdown(new Date(nextPass.aos_time).getTime())}
+              </div>
+              <div className="cs-pass-label">TIME TO AOS</div>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -303,12 +349,12 @@ function PassCountdown() {
 /* ════════════════════════════════════════
    MAIN CONTROL STRIP (exports)
    ════════════════════════════════════════ */
-export default function ControlStrip({ alerts }) {
+export default function ControlStrip({ alerts, contactState, bufferDump, clearBufferDump }) {
   return (
     <div className="control-strip">
-      <EventLog alerts={alerts} />
+      <EventLog alerts={alerts} contactState={contactState} bufferDump={bufferDump} clearBufferDump={clearBufferDump} />
       <CommandTerminal />
-      <PassCountdown />
+      <PassCountdown contactState={contactState} />
     </div>
   );
 }

@@ -81,6 +81,10 @@ class FDIREngine:
             severity = rule["severity"]
             action = rule["corrective_action"]
 
+            # Skip comms rules during blackout — SNR=0 is expected when not in contact
+            if param == "snr" and not telemetry.get("in_contact", True):
+                continue
+
             # Map parameter names to telemetry fields
             value = self._get_value(telemetry, param)
             if value is None:
