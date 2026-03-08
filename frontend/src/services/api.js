@@ -200,6 +200,16 @@ export const api = {
     }
   },
 
+  sendCommand: async (command) => {
+    try {
+      const response = await client.post('/commands/send', { command });
+      return response.data;
+    } catch (error) {
+      console.error("Send Command Error:", error.message);
+      return null;
+    }
+  },
+
   // Intelligence Layer
   getAutonomyStatus: async () => {
     try {

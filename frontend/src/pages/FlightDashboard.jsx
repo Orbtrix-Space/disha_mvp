@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Radio, Wifi, WifiOff, Gauge, Zap, Database, Target,
-  BatteryCharging, Navigation, Globe,
+  BatteryCharging, Navigation, Globe, Clock,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, ResponsiveContainer,
@@ -402,6 +402,77 @@ function PowerPredictionCard() {
   );
 }
 
+/* ── Pass Timeline Gantt ── */
+function PassTimelineGantt() {
+  const [passes, setPasses] = useState([]);
+
+  useEffect(() => {
+    const fetch = () => api.getGroundStationPasses().then(d => {
+      if (d && d.passes) setPasses(d.passes.slice(0, 12));
+    });
+    fetch();
+    const id = setInterval(fetch, 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  const { timeRange, bars } = useMemo(() => {
+    if (passes.length === 0) return { timeRange: 0, bars: [] };
+    const now = Date.now();
+    const windowHrs = 6;
+    const windowMs = windowHrs * 3600000;
+    const endMs = now + windowMs;
+
+    const b = passes
+      .map(p => {
+        const aos = new Date(p.aos_time).getTime();
+        const los = new Date(p.los_time).getTime();
+        if (los < now || aos > endMs) return null;
+        return {
+          station: p.station_name,
+          maxElev: p.max_elevation_deg,
+          leftPct: Math.max(0, ((aos - now) / windowMs) * 100),
+          widthPct: Math.max(0.5, ((Math.min(los, endMs) - Math.max(aos, now)) / windowMs) * 100),
+          duration: Math.round(p.duration_sec),
+        };
+      })
+      .filter(Boolean);
+    return { timeRange: windowHrs, bars: b };
+  }, [passes]);
+
+  if (passes.length === 0) return null;
+
+  return (
+    <div className="flight-card" style={{ gridColumn: '1 / -1' }}>
+      <div className="flight-card-header"><Clock size={14} /> PASS TIMELINE (next {timeRange}h)</div>
+      <div className="flight-card-body">
+        <div className="pass-gantt">
+          <div className="pass-gantt-axis">
+            {[0, 1, 2, 3, 4, 5, 6].map(h => (
+              <span key={h} className="pass-gantt-tick" style={{ left: `${(h / 6) * 100}%` }}>+{h}h</span>
+            ))}
+          </div>
+          <div className="pass-gantt-rows">
+            {bars.map((b, i) => (
+              <div key={i} className="pass-gantt-row">
+                <span className="pass-gantt-label">{b.station.replace('ISTRAC ', '')}</span>
+                <div className="pass-gantt-track">
+                  <div
+                    className="pass-gantt-bar"
+                    style={{ left: `${b.leftPct}%`, width: `${b.widthPct}%` }}
+                    title={`${b.station} | ${b.duration}s | ${b.maxElev}° max`}
+                  >
+                    <span className="pass-gantt-bar-text">{b.maxElev}°</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Main Flight Dashboard ── */
 export default function FlightDashboard({ telemetry, onNetworkChange }) {
   return (
@@ -414,6 +485,7 @@ export default function FlightDashboard({ telemetry, onNetworkChange }) {
         <ECIStateCard telemetry={telemetry} />
         <PowerPredictionCard />
       </div>
+      <PassTimelineGantt />
     </div>
   );
 }

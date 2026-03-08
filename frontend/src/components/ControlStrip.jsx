@@ -119,11 +119,48 @@ function EventLog({ alerts, contactState, bufferDump, clearBufferDump }) {
     if (logRef.current) logRef.current.scrollTop = 0;
   }, [events.length]);
 
+  const exportLog = useCallback((format) => {
+    if (events.length === 0) return;
+    let content, mime, ext;
+    if (format === 'csv') {
+      const rows = ['Timestamp,Severity,Subsystem,Message'];
+      for (const ev of events) {
+        const ts = ev.time instanceof Date ? ev.time.toISOString() : ev.time;
+        rows.push(`"${ts}","${ev.severity}","${ev.subsystem}","${ev.message.replace(/"/g, '""')}"`);
+      }
+      content = rows.join('\n');
+      mime = 'text/csv';
+      ext = 'csv';
+    } else {
+      content = JSON.stringify(events.map(ev => ({
+        timestamp: ev.time instanceof Date ? ev.time.toISOString() : ev.time,
+        severity: ev.severity, subsystem: ev.subsystem, message: ev.message,
+      })), null, 2);
+      mime = 'application/json';
+      ext = 'json';
+    }
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `disha-event-log-${new Date().toISOString().slice(0, 19).replace(/:/g, '')}.${ext}`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [events]);
+
   return (
     <div className="cs-panel cs-events">
       <div className="cs-panel-header">
         <AlertTriangle size={12} /> EVENT LOG
         <span className="cs-badge">{events.length}</span>
+        <div className="cs-export-btns">
+          <button className="cs-export-btn" onClick={() => exportLog('json')} title="Export JSON">
+            <Download size={10} /> JSON
+          </button>
+          <button className="cs-export-btn" onClick={() => exportLog('csv')} title="Export CSV">
+            <Download size={10} /> CSV
+          </button>
+        </div>
       </div>
       <div className="cs-event-list" ref={logRef}>
         {events.length === 0 && (
@@ -161,24 +198,29 @@ function CommandTerminal() {
     ? SAT_COMMANDS.filter(c => c.cmd.toLowerCase().includes(input.toLowerCase()))
     : SAT_COMMANDS;
 
-  const sendCommand = useCallback((cmdText) => {
+  const sendCommand = useCallback(async (cmdText) => {
     const text = cmdText || input.trim();
     if (!text) return;
 
     const id = `CMD-${Date.now().toString(36).toUpperCase()}`;
-    const newCmd = { id, command: text, status: 'QUEUED', time: new Date() };
+    const newCmd = { id, command: text, status: 'QUEUED', time: new Date(), effect: '' };
     setQueue(prev => [newCmd, ...prev].slice(0, 50));
     setInput('');
     setShowSuggestions(false);
 
-    // Simulate status progression: QUEUED -> SENT -> EXECUTED
+    // Send to backend
     setTimeout(() => {
       setQueue(prev => prev.map(c => c.id === id ? { ...c, status: 'SENT' } : c));
-    }, 800 + Math.random() * 500);
+    }, 400);
 
-    setTimeout(() => {
-      setQueue(prev => prev.map(c => c.id === id ? { ...c, status: 'EXECUTED' } : c));
-    }, 2500 + Math.random() * 1500);
+    const result = await api.sendCommand(text);
+    if (result && result.status === 'EXECUTED') {
+      setQueue(prev => prev.map(c => c.id === id ? { ...c, status: 'EXECUTED', effect: result.effect } : c));
+    } else if (result && result.status === 'UNKNOWN') {
+      setQueue(prev => prev.map(c => c.id === id ? { ...c, status: 'REJECTED', effect: result.effect } : c));
+    } else {
+      setQueue(prev => prev.map(c => c.id === id ? { ...c, status: 'FAILED', effect: 'Network error' } : c));
+    }
   }, [input]);
 
   const handleKey = (e) => {
@@ -191,7 +233,7 @@ function CommandTerminal() {
     }
   };
 
-  const statusColor = { QUEUED: '#f59e0b', SENT: '#3b82f6', EXECUTED: '#22c55e' };
+  const statusColor = { QUEUED: '#f59e0b', SENT: '#3b82f6', EXECUTED: '#22c55e', REJECTED: '#ef4444', FAILED: '#ef4444' };
 
   return (
     <div className="cs-panel cs-terminal">
@@ -241,6 +283,7 @@ function CommandTerminal() {
           <div className="cs-cmd-row" key={cmd.id}>
             <span className="cs-cmd-id">{cmd.id}</span>
             <span className="cs-cmd-text">{cmd.command}</span>
+            {cmd.effect && <span className="cs-cmd-effect">{cmd.effect}</span>}
             <span className="cs-cmd-status" style={{ color: statusColor[cmd.status] }}>
               {cmd.status}
             </span>

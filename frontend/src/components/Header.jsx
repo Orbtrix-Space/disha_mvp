@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Satellite, Monitor, Send, ShieldAlert, RotateCcw, Globe } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Satellite, Monitor, Send, ShieldAlert, RotateCcw, Globe, Battery, Thermometer, Radio, Crosshair } from 'lucide-react';
 
 function Clock() {
   const [time, setTime] = useState(new Date());
@@ -21,7 +21,33 @@ const TABS = [
   { key: 'schedule', label: 'SCHEDULE', icon: Send },
 ];
 
-export default function Header({ view, setView, health, onReset, alertCount = 0 }) {
+function SatHealthStrip({ telemetry }) {
+  const checks = useMemo(() => {
+    if (!telemetry) return null;
+    return [
+      { key: 'PWR', icon: Battery, ok: telemetry.battery_pct > 20 },
+      { key: 'THM', icon: Thermometer, ok: telemetry.panel_temp_c > -40 && telemetry.panel_temp_c < 85 },
+      { key: 'COM', icon: Radio, ok: telemetry.link_status === 'NOMINAL' },
+      { key: 'ADS', icon: Crosshair, ok: telemetry.pointing_error < 2.0 },
+    ];
+  }, [telemetry]);
+
+  if (!checks) return null;
+
+  const allOk = checks.every(c => c.ok);
+
+  return (
+    <div className={`sat-health-strip ${allOk ? 'nominal' : 'degraded'}`}>
+      {checks.map(({ key, icon: Icon, ok }) => (
+        <span key={key} className={`sat-health-chip ${ok ? 'ok' : 'warn'}`} title={key}>
+          <Icon size={9} /> {key}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+export default function Header({ view, setView, health, onReset, alertCount = 0, telemetry }) {
   return (
     <header className="header">
       <div className="header-left">
@@ -51,6 +77,7 @@ export default function Header({ view, setView, health, onReset, alertCount = 0 
       </div>
 
       <div className="header-right">
+        <SatHealthStrip telemetry={telemetry} />
         <Clock />
         <button
           className="nav-btn"

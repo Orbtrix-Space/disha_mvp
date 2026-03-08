@@ -55,6 +55,7 @@ export default function GroundTrack2D({ telemetry, groundNetworkVersion }) {
   const mapRef = useRef(null);
   const satMarkerRef = useRef(null);
   const trailLineRef = useRef(null);
+  const predictLineRef = useRef(null);
   const trailRef = useRef([]);
   const stationLayerRef = useRef(null);
 
@@ -93,6 +94,14 @@ export default function GroundTrack2D({ telemetry, groundNetworkVersion }) {
       weight: 2,
       opacity: 0.5,
       dashArray: '6, 4',
+    }).addTo(map);
+
+    // Predicted orbit track (fetched periodically)
+    predictLineRef.current = L.polyline([], {
+      color: '#0ea5e9',
+      weight: 1.5,
+      opacity: 0.35,
+      dashArray: '4, 8',
     }).addTo(map);
 
     // Zoom control in bottom-right
@@ -143,6 +152,28 @@ export default function GroundTrack2D({ telemetry, groundNetworkVersion }) {
       }
     }
   }, [telemetry]);
+
+  // Fetch and draw predicted orbit ground track
+  useEffect(() => {
+    let active = true;
+    const fetchOrbit = async () => {
+      const data = await api.getOrbitPrediction();
+      if (!active || !data || !data.points || !predictLineRef.current) return;
+      // Split at anti-meridian wraps
+      const segments = [[]];
+      for (let i = 0; i < data.points.length; i++) {
+        const p = data.points[i];
+        segments[segments.length - 1].push([p.lat, p.lon]);
+        if (i < data.points.length - 1 && Math.abs(p.lon - data.points[i + 1].lon) > 180) {
+          segments.push([]);
+        }
+      }
+      predictLineRef.current.setLatLngs(segments);
+    };
+    fetchOrbit();
+    const id = setInterval(fetchOrbit, 30000);
+    return () => { active = false; clearInterval(id); };
+  }, []);
 
   // Reload stations when network changes
   useEffect(() => {

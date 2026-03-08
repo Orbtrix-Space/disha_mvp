@@ -156,3 +156,50 @@ def get_command_sequence(sequence_id: str):
 def approve_commands(sequence_id: str):
     _, command_engine, _ = get_deps()
     return command_engine.approve_sequence(sequence_id)
+
+
+@router.post("/commands/send")
+def send_adhoc_command(payload: dict):
+    """Execute an ad-hoc operator command against the satellite state."""
+    satellite, command_engine, _ = get_deps()
+    cmd = payload.get("command", "").strip().upper()
+    if not cmd:
+        return {"status": "ERROR", "message": "Empty command"}
+
+    result = {"status": "EXECUTED", "command": cmd, "effect": ""}
+
+    if cmd == "SAFE MODE":
+        satellite.attitude_mode = "SAFE"
+        result["effect"] = "Satellite switched to SAFE mode"
+    elif cmd == "PAYLOAD ON":
+        satellite.payload_status = "ACTIVE"
+        result["effect"] = "Payload activated"
+    elif cmd == "PAYLOAD OFF":
+        satellite.payload_status = "IDLE"
+        result["effect"] = "Payload deactivated"
+    elif cmd == "ATTITUDE NADIR":
+        satellite.attitude_mode = "NADIR"
+        result["effect"] = "Attitude set to NADIR pointing"
+    elif cmd == "ATTITUDE SUN":
+        satellite.attitude_mode = "SUN_TRACKING"
+        result["effect"] = "Attitude set to SUN_TRACKING"
+    elif cmd == "TX HIGH":
+        satellite.data_rate_kbps = 512.0
+        result["effect"] = "High-gain transmitter enabled (512 kbps)"
+    elif cmd == "TX LOW":
+        satellite.data_rate_kbps = 64.0
+        result["effect"] = "Low-power transmitter enabled (64 kbps)"
+    elif cmd == "HEATER ON":
+        satellite.heater_active = True
+        result["effect"] = "Battery heater enabled"
+    elif cmd == "HEATER OFF":
+        satellite.heater_active = False
+        result["effect"] = "Battery heater disabled"
+    else:
+        result["status"] = "UNKNOWN"
+        result["effect"] = f"Unrecognized command: {cmd}"
+
+    # Log the command
+    command_engine.log_command(cmd, result["status"])
+
+    return result

@@ -11,7 +11,7 @@ import ScheduleDashboard from './pages/ScheduleDashboard';
 const WS_URL = 'ws://127.0.0.1:8000/ws/telemetry';
 
 function AppContent() {
-  const { telemetry, alerts, connected, contactState, bufferDump, clearAlerts, clearBufferDump } = useWebSocket(WS_URL);
+  const { telemetry, alerts, connected, contactState, bufferDump, telemetryHistory, clearAlerts, clearBufferDump } = useWebSocket(WS_URL);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -37,6 +37,7 @@ function AppContent() {
         health={connected ? 'online' : 'offline'}
         onReset={handleReset}
         alertCount={alerts.filter((a) => a.severity === 'CRITICAL').length}
+        telemetry={telemetry}
       />
 
       <div className="main-content">
@@ -48,6 +49,7 @@ function AppContent() {
               contactState={contactState}
               bufferDump={bufferDump}
               clearBufferDump={clearBufferDump}
+              telemetryHistory={telemetryHistory}
             />
           } />
           <Route path="/flight" element={<FlightDashboard telemetry={telemetry} />} />

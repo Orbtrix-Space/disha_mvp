@@ -131,6 +131,15 @@ class CommandEngine:
             "detail": detail,
         })
 
+    def log_command(self, command: str, status: str):
+        """Log an ad-hoc operator command."""
+        self.command_log.append({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "action": "ADHOC",
+            "sequence_id": None,
+            "detail": f"{command} -> {status}",
+        })
+
     def reset(self):
         self.sequences.clear()
         self.command_log.clear()

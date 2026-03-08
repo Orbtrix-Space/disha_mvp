@@ -12,8 +12,10 @@ export function useWebSocket(url) {
     blackoutSec: 0,
   });
   const [bufferDump, setBufferDump] = useState(null);
+  const [telemetryHistory, setTelemetryHistory] = useState([]);
   const wsRef = useRef(null);
   const alertsRef = useRef([]);
+  const historyRef = useRef([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,9 +47,11 @@ export function useWebSocket(url) {
         if (data.type === 'tle_loaded') {
           // New satellite loaded — clear all old state
           alertsRef.current = [];
+          historyRef.current = [];
           setAlerts([]);
           setBufferDump(null);
           setTelemetry(null);
+          setTelemetryHistory([]);
           return;
         }
 
@@ -63,6 +67,17 @@ export function useWebSocket(url) {
 
         if (data.telemetry) {
           setTelemetry(data.telemetry);
+
+          // Store history (last 30 minutes = 1800 frames at 1Hz)
+          historyRef.current.push({
+            ...data.telemetry,
+            _receivedAt: Date.now(),
+          });
+          if (historyRef.current.length > 1800) historyRef.current.shift();
+          // Update state every 10 frames to avoid excessive re-renders
+          if (historyRef.current.length % 10 === 0) {
+            setTelemetryHistory([...historyRef.current]);
+          }
 
           // Update contact state from telemetry metadata
           setContactState({
@@ -103,5 +118,5 @@ export function useWebSocket(url) {
     setBufferDump(null);
   }, []);
 
-  return { telemetry, alerts, connected, contactState, bufferDump, clearAlerts, clearBufferDump };
+  return { telemetry, alerts, connected, contactState, bufferDump, telemetryHistory, clearAlerts, clearBufferDump };
 }
