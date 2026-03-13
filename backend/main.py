@@ -19,6 +19,7 @@ from backend.core.autonomy_manager import AutonomyManager
 from backend.core.command_engine import CommandEngine
 from backend.core.ground_stations import GroundStationPassPredictor, check_contact_now
 from backend.core.telemetry_manager import ConnectionManager, build_telemetry_frame
+from backend.core.telemetry_recorder import TelemetryRecorder
 
 
 # ====================================================
@@ -35,6 +36,7 @@ ws_manager = ConnectionManager()
 pass_predictor = GroundStationPassPredictor()
 command_engine = CommandEngine()
 autonomy_manager = AutonomyManager()
+telemetry_recorder = TelemetryRecorder()
 
 satellite.tle_manager = tle_manager
 
@@ -112,6 +114,7 @@ async def telemetry_loop():
 
                 # Send live telemetry
                 frame = build_telemetry_frame(raw_state, alerts, source="LIVE")
+                telemetry_recorder.record(frame, source="LIVE", alerts=alerts)
                 await ws_manager.broadcast({
                     "type": "telemetry",
                     "telemetry": frame,
@@ -123,6 +126,7 @@ async def telemetry_loop():
 
                 # Send predicted frame so the frontend isn't blind
                 frame = build_telemetry_frame(raw_state, alerts, source="PREDICTED")
+                telemetry_recorder.record(frame, source="PREDICTED", alerts=alerts)
                 await ws_manager.broadcast({
                     "type": "telemetry",
                     "telemetry": frame,
@@ -178,6 +182,7 @@ from backend.api.fdir import router as fdir_router
 from backend.api.planning import router as planning_router
 from backend.api.intelligence import router as intelligence_router
 from backend.api.websocket import router as ws_router
+from backend.api.recorder import router as recorder_router
 
 app.include_router(core_router)
 app.include_router(tle_router)
@@ -186,3 +191,4 @@ app.include_router(fdir_router)
 app.include_router(planning_router)
 app.include_router(intelligence_router)
 app.include_router(ws_router)
+app.include_router(recorder_router)

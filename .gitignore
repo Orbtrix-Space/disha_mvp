@@ -17,3 +17,6 @@ dist/
 
 # Windows artifacts
 nul
+
+# Generated logs
+telemetry_logs/
