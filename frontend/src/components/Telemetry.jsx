@@ -23,7 +23,7 @@ function getBatteryColor(pct) {
 
 const SPARKLINE_MAX = 60;
 
-function Sparkline({ data, color = '#22d3ee', width = 70, height = 20, thresholds }) {
+function Sparkline({ data, color = '#2dd4bf', width = 70, height = 20, thresholds }) {
   if (!data || data.length < 2) return null;
 
   // Expand range to include threshold lines so they're always visible
@@ -247,7 +247,7 @@ export default function Telemetry({ telemetry, contactState }) {
                 <div className="telem-label">Bus Voltage</div>
                 <div className="telem-value green" style={{ fontSize: '0.9rem' }}>{telemetry.bus_voltage}<span className="telem-unit">V</span></div>
               </div>
-              <Sparkline data={historyRef.current.bus_voltage} color="#22c55e"
+              <Sparkline data={historyRef.current.bus_voltage} color="#5eead4"
                 thresholds={[{ value: 10, color: '#f59e0b' }, { value: 8, color: '#ef4444' }]} />
             </div>
           </div>
@@ -266,7 +266,7 @@ export default function Telemetry({ telemetry, contactState }) {
                 <div className="telem-label">Panel Temp</div>
                 <div className="telem-value cyan" style={{ fontSize: '0.9rem' }}>{telemetry.panel_temp_c}<span className="telem-unit">°C</span></div>
               </div>
-              <Sparkline data={historyRef.current.panel_temp} color="#22d3ee"
+              <Sparkline data={historyRef.current.panel_temp} color="#2dd4bf"
                 thresholds={[{ value: 85, color: '#f59e0b' }, { value: -40, color: '#f59e0b' }]} />
             </div>
           </div>
@@ -276,7 +276,7 @@ export default function Telemetry({ telemetry, contactState }) {
                 <div className="telem-label">Batt Temp</div>
                 <div className="telem-value cyan" style={{ fontSize: '0.9rem' }}>{telemetry.battery_temp_c}<span className="telem-unit">°C</span></div>
               </div>
-              <Sparkline data={historyRef.current.battery_temp} color="#22d3ee"
+              <Sparkline data={historyRef.current.battery_temp} color="#2dd4bf"
                 thresholds={[{ value: 45, color: '#f59e0b' }, { value: 0, color: '#f59e0b' }]} />
             </div>
           </div>
@@ -286,7 +286,7 @@ export default function Telemetry({ telemetry, contactState }) {
                 <div className="telem-label">SNR</div>
                 <div className="telem-value green" style={{ fontSize: '0.9rem' }}>{telemetry.snr_db}<span className="telem-unit">dB</span></div>
               </div>
-              <Sparkline data={historyRef.current.snr} color="#22c55e"
+              <Sparkline data={historyRef.current.snr} color="#5eead4"
                 thresholds={[{ value: 8, color: '#f59e0b' }, { value: 5, color: '#ef4444' }]} />
             </div>
           </div>

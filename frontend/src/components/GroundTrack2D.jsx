@@ -4,11 +4,11 @@ import 'leaflet/dist/leaflet.css';
 import { api } from '../services/api';
 
 function getStationColor(name) {
-  if (name.startsWith('ISTRAC')) return '#00d4ff';
+  if (name.startsWith('ISTRAC')) return '#2dd4bf';
   if (name.startsWith('ESTRACK')) return '#a855f7';
   if (name.includes('DSN') || name.startsWith('Wallops') || name.startsWith('White Sands') || name.startsWith('McMurdo')) return '#ff4081';
   if (name.startsWith('KSAT') || name.startsWith('SvalSat')) return '#ffd700';
-  if (name.startsWith('Custom')) return '#22c55e';
+  if (name.startsWith('Custom')) return '#5eead4';
   return '#ff6b35';
 }
 
@@ -90,7 +90,7 @@ export default function GroundTrack2D({ telemetry, groundNetworkVersion }) {
 
     // Ground track trail polyline
     trailLineRef.current = L.polyline([], {
-      color: '#22d3ee',
+      color: '#2dd4bf',
       weight: 2,
       opacity: 0.5,
       dashArray: '6, 4',
@@ -98,7 +98,7 @@ export default function GroundTrack2D({ telemetry, groundNetworkVersion }) {
 
     // Predicted orbit track (fetched periodically)
     predictLineRef.current = L.polyline([], {
-      color: '#0ea5e9',
+      color: '#14b8a6',
       weight: 1.5,
       opacity: 0.35,
       dashArray: '4, 8',

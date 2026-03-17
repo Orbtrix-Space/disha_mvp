@@ -330,8 +330,8 @@ function PowerPredictionCard() {
                   <AreaChart data={drainData}>
                     <defs>
                       <linearGradient id="socGradF" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#22d3ee" stopOpacity={0} />
+                        <stop offset="5%" stopColor="#2dd4bf" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#2dd4bf" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
@@ -339,7 +339,7 @@ function PowerPredictionCard() {
                     <YAxis domain={[0, 100]} tick={{ fontSize: 9, fill: '#64748b' }} tickFormatter={v => `${v}%`} width={32} />
                     <Tooltip content={<ChartTooltipContent />} />
                     <ReferenceLine y={20} stroke="#ef4444" strokeDasharray="3 3" />
-                    <Area type="monotone" dataKey="soc" name="SOC" stroke="#22d3ee" fill="url(#socGradF)" strokeWidth={1.5} dot={false} />
+                    <Area type="monotone" dataKey="soc" name="SOC" stroke="#2dd4bf" fill="url(#socGradF)" strokeWidth={1.5} dot={false} />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -352,8 +352,8 @@ function PowerPredictionCard() {
                   <AreaChart data={drainData}>
                     <defs>
                       <linearGradient id="solarGradF" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.25} />
-                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                        <stop offset="5%" stopColor="#5eead4" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#5eead4" stopOpacity={0} />
                       </linearGradient>
                       <linearGradient id="loadGradF" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25} />
@@ -364,7 +364,7 @@ function PowerPredictionCard() {
                     <XAxis dataKey="t" tick={{ fontSize: 9, fill: '#64748b' }} tickFormatter={v => `${v}m`} />
                     <YAxis tick={{ fontSize: 9, fill: '#64748b' }} tickFormatter={v => `${v}W`} width={32} />
                     <Tooltip content={<ChartTooltipContent />} />
-                    <Area type="stepAfter" dataKey="solar" name="Solar" stroke="#22c55e" fill="url(#solarGradF)" strokeWidth={1.2} dot={false} />
+                    <Area type="stepAfter" dataKey="solar" name="Solar" stroke="#5eead4" fill="url(#solarGradF)" strokeWidth={1.2} dot={false} />
                     <Area type="stepAfter" dataKey="load" name="Load" stroke="#ef4444" fill="url(#loadGradF)" strokeWidth={1.2} dot={false} />
                   </AreaChart>
                 </ResponsiveContainer>

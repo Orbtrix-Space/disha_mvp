@@ -7,11 +7,11 @@ import { api } from '../services/api';
 
 /* ───────── severity config ───────── */
 const SEV = {
-  INFO:     { color: '#3b82f6', icon: Info,           tag: 'INFO' },
+  INFO:     { color: '#14b8a6', icon: Info,           tag: 'INFO' },
   WARNING:  { color: '#f59e0b', icon: AlertTriangle,  tag: 'WARN' },
   CRITICAL: { color: '#ef4444', icon: AlertCircle,     tag: 'CRIT' },
   SYSTEM:   { color: '#64748b', icon: Terminal,        tag: 'SYS' },
-  CMD:      { color: '#22c55e', icon: Send,            tag: 'CMD' },
+  CMD:      { color: '#5eead4', icon: Send,            tag: 'CMD' },
 };
 
 /* ───────── predefined satellite commands ───────── */
@@ -233,7 +233,7 @@ function CommandTerminal() {
     }
   };
 
-  const statusColor = { QUEUED: '#f59e0b', SENT: '#3b82f6', EXECUTED: '#22c55e', REJECTED: '#ef4444', FAILED: '#ef4444' };
+  const statusColor = { QUEUED: '#f59e0b', SENT: '#14b8a6', EXECUTED: '#5eead4', REJECTED: '#ef4444', FAILED: '#ef4444' };
 
   return (
     <div className="cs-panel cs-terminal">

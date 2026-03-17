@@ -134,14 +134,14 @@ export default function CesiumGlobe({ telemetry, groundNetworkVersion }) {
       position: Cesium.Cartesian3.fromDegrees(78, 20, 622000),
       point: {
         pixelSize: 10,
-        color: Cesium.Color.fromCssColorString('#22d3ee'),
+        color: Cesium.Color.fromCssColorString('#2dd4bf'),
         outlineColor: Cesium.Color.WHITE,
         outlineWidth: 1,
       },
       label: {
         text: 'SIM-SAT',
         font: '11px JetBrains Mono, monospace',
-        fillColor: Cesium.Color.fromCssColorString('#0ea5e9'),
+        fillColor: Cesium.Color.fromCssColorString('#14b8a6'),
         style: Cesium.LabelStyle.FILL,
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
         pixelOffset: new Cesium.Cartesian2(0, -14),
@@ -157,7 +157,7 @@ export default function CesiumGlobe({ telemetry, groundNetworkVersion }) {
         positions: [],
         width: 1.5,
         material: new Cesium.ColorMaterialProperty(
-          Cesium.Color.fromCssColorString('#0ea5e9').withAlpha(0.4)
+          Cesium.Color.fromCssColorString('#14b8a6').withAlpha(0.4)
         ),
       },
     });
@@ -168,7 +168,7 @@ export default function CesiumGlobe({ telemetry, groundNetworkVersion }) {
         positions: [],
         width: 1,
         material: new Cesium.PolylineDashMaterialProperty({
-          color: Cesium.Color.fromCssColorString('#22d3ee').withAlpha(0.15),
+          color: Cesium.Color.fromCssColorString('#2dd4bf').withAlpha(0.15),
           dashLength: 16,
         }),
         clampToGround: true,
@@ -329,7 +329,7 @@ export default function CesiumGlobe({ telemetry, groundNetworkVersion }) {
             <button
               className={`map-stat-chip ${tracking ? 'tracking-active' : ''}`}
               onClick={toggleTracking}
-              style={{ cursor: 'pointer', border: tracking ? '1px solid #22d3ee' : undefined }}
+              style={{ cursor: 'pointer', border: tracking ? '1px solid #2dd4bf' : undefined }}
             >
               {tracking ? 'TRACKING' : 'TRACK SAT'}
             </button>

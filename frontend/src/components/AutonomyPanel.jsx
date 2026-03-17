@@ -3,7 +3,7 @@ import { Shield, AlertTriangle, CheckCircle } from 'lucide-react';
 import { api } from '../services/api';
 
 const MODE_COLORS = {
-  AUTONOMOUS: '#22c55e',
+  AUTONOMOUS: '#5eead4',
   GUARDED: '#eab308',
   SAFE: '#ef4444',
 };
@@ -26,7 +26,7 @@ export default function AutonomyPanel() {
   if (!status) return null;
 
   const mode = status.mode || 'AUTONOMOUS';
-  const color = MODE_COLORS[mode] || '#22c55e';
+  const color = MODE_COLORS[mode] || '#5eead4';
   const confidence = Math.round((status.confidence || 1) * 100);
   const Icon = mode === 'SAFE' ? AlertTriangle : mode === 'GUARDED' ? Shield : CheckCircle;
 

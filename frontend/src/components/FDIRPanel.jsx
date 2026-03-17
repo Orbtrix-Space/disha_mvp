@@ -98,7 +98,7 @@ function AutonomyPanel() {
 
   if (!data) return null;
 
-  const modeColor = data.mode === 'AUTONOMOUS' ? '#22c55e'
+  const modeColor = data.mode === 'AUTONOMOUS' ? '#5eead4'
     : data.mode === 'GUARDED' ? '#f59e0b' : '#ef4444';
   const confPct = Math.round(data.confidence * 100);
 
@@ -133,7 +133,7 @@ function ConstraintsPanel() {
   if (!data) return null;
 
   const riskPct = Math.round(data.risk_score * 100);
-  const riskColor = riskPct < 20 ? '#22c55e' : riskPct < 50 ? '#f59e0b' : '#ef4444';
+  const riskColor = riskPct < 20 ? '#5eead4' : riskPct < 50 ? '#f59e0b' : '#ef4444';
 
   return (
     <div className="fdir-intel-card">

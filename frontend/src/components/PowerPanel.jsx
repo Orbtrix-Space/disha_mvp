@@ -25,7 +25,7 @@ export default function PowerPanel() {
   return (
     <div className="panel-section">
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <Battery size={14} color="#22c55e" />
+        <Battery size={14} color="#5eead4" />
         <span className="label" style={{ fontSize: 11, color: '#888' }}>POWER PROJECTION</span>
         <ModeIcon size={12} color={modeColor} style={{ marginLeft: 'auto' }} />
         <span style={{ fontSize: 10, color: modeColor }}>{projection.current_mode}</span>

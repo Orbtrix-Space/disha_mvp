@@ -20,7 +20,7 @@ export default function ConstraintPanel() {
   if (!data) return null;
 
   const riskPct = Math.round((data.risk_score || 0) * 100);
-  const riskColor = riskPct > 60 ? '#ef4444' : riskPct > 30 ? '#eab308' : '#22c55e';
+  const riskColor = riskPct > 60 ? '#ef4444' : riskPct > 30 ? '#eab308' : '#5eead4';
 
   return (
     <div className="panel-section">

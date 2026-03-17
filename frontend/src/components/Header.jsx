@@ -52,11 +52,7 @@ export default function Header({ view, setView, health, onReset, alertCount = 0,
     <header className="header">
       <div className="header-left">
         <div className="header-logo">
-          <Satellite size={22} />
-          <div>
-            <div className="header-title">DISHA</div>
-            <div className="header-subtitle">Satellite Operations</div>
-          </div>
+          <div className="header-title">DISHA</div>
         </div>
 
         <nav className="header-nav" style={{ marginLeft: 24 }}>
