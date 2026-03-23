@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Satellite, Monitor, Send, ShieldAlert, RotateCcw, Globe, Battery, Thermometer, Radio, Crosshair } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Satellite, Monitor, Send, ShieldAlert, RotateCcw, Globe, Battery, Thermometer, Radio, Crosshair, Camera } from 'lucide-react';
+import html2canvas from 'html2canvas';
 
 function Clock() {
   const [time, setTime] = useState(new Date());
@@ -48,6 +49,31 @@ function SatHealthStrip({ telemetry }) {
 }
 
 export default function Header({ view, setView, health, onReset, alertCount = 0, telemetry }) {
+  const [snapping, setSnapping] = useState(false);
+
+  const handleSnapshot = useCallback(async () => {
+    setSnapping(true);
+    try {
+      const root = document.getElementById('root');
+      const canvas = await html2canvas(root, {
+        backgroundColor: '#000000',
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        ignoreElements: (el) => el.classList?.contains('cesium-widget-credits'),
+      });
+      const link = document.createElement('a');
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      link.download = `DISHA_${view.toUpperCase()}_${ts}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch (err) {
+      console.error('Snapshot failed:', err);
+    } finally {
+      setSnapping(false);
+    }
+  }, [view]);
+
   return (
     <header className="header">
       <div className="header-left">
@@ -75,6 +101,14 @@ export default function Header({ view, setView, health, onReset, alertCount = 0,
       <div className="header-right">
         <SatHealthStrip telemetry={telemetry} />
         <Clock />
+        <button
+          className="nav-btn"
+          onClick={handleSnapshot}
+          title="Capture Dashboard Snapshot"
+          disabled={snapping}
+        >
+          <Camera size={14} />
+        </button>
         <button
           className="nav-btn"
           onClick={onReset}
