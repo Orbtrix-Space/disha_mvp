@@ -8,6 +8,7 @@ import {
   ReferenceLine, Tooltip, CartesianGrid,
 } from 'recharts';
 import { api } from '../services/api';
+import { useTheme } from '../hooks/useTheme';
 
 function ChartTooltipContent({ active, payload, label }) {
   if (!active || !payload || !payload.length) return null;
@@ -334,7 +335,7 @@ function PowerPredictionCard() {
                         <stop offset="95%" stopColor="#2dd4bf" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
                     <XAxis dataKey="t" tick={{ fontSize: 9, fill: '#64748b' }} tickFormatter={v => `${v}m`} />
                     <YAxis domain={[0, 100]} tick={{ fontSize: 9, fill: '#64748b' }} tickFormatter={v => `${v}%`} width={32} />
                     <Tooltip content={<ChartTooltipContent />} />
@@ -360,7 +361,7 @@ function PowerPredictionCard() {
                         <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
                     <XAxis dataKey="t" tick={{ fontSize: 9, fill: '#64748b' }} tickFormatter={v => `${v}m`} />
                     <YAxis tick={{ fontSize: 9, fill: '#64748b' }} tickFormatter={v => `${v}W`} width={32} />
                     <Tooltip content={<ChartTooltipContent />} />
@@ -387,7 +388,7 @@ function PowerPredictionCard() {
                       <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
                   <XAxis dataKey="t" tick={{ fontSize: 9, fill: '#64748b' }} tickFormatter={v => `${v}m`} />
                   <YAxis tick={{ fontSize: 9, fill: '#64748b' }} tickFormatter={v => `${v}G`} width={32} />
                   <Tooltip content={<ChartTooltipContent />} />

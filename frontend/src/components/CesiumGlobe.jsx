@@ -75,7 +75,16 @@ export default function CesiumGlobe({ telemetry, groundNetworkVersion }) {
       infoBox: false,
       selectionIndicator: false,
       creditContainer: document.createElement('div'),
-      skyBox: false,
+      skyBox: new Cesium.SkyBox({
+        sources: {
+          positiveX: Cesium.buildModuleUrl('Assets/Textures/SkyBox/tycho2t3_80_px.jpg'),
+          negativeX: Cesium.buildModuleUrl('Assets/Textures/SkyBox/tycho2t3_80_mx.jpg'),
+          positiveY: Cesium.buildModuleUrl('Assets/Textures/SkyBox/tycho2t3_80_py.jpg'),
+          negativeY: Cesium.buildModuleUrl('Assets/Textures/SkyBox/tycho2t3_80_my.jpg'),
+          positiveZ: Cesium.buildModuleUrl('Assets/Textures/SkyBox/tycho2t3_80_pz.jpg'),
+          negativeZ: Cesium.buildModuleUrl('Assets/Textures/SkyBox/tycho2t3_80_mz.jpg'),
+        },
+      }),
       skyAtmosphere: new Cesium.SkyAtmosphere(),
       orderIndependentTranslucency: false,
       msaaSamples: 4,

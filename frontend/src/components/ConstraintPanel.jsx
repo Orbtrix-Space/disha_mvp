@@ -31,7 +31,7 @@ export default function ConstraintPanel() {
           {riskPct}%
         </span>
       </div>
-      <div style={{ width: '100%', height: 4, background: '#1a1a1a', borderRadius: 2, marginBottom: 8 }}>
+      <div style={{ width: '100%', height: 4, background: 'var(--border-primary)', borderRadius: 2, marginBottom: 8 }}>
         <div style={{ width: `${riskPct}%`, height: '100%', background: riskColor, borderRadius: 2, transition: 'width 0.3s' }} />
       </div>
       {data.active_constraints && data.active_constraints.length > 0 && (

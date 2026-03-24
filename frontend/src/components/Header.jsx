@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Satellite, Monitor, Send, ShieldAlert, RotateCcw, Globe, Battery, Thermometer, Radio, Crosshair, Camera } from 'lucide-react';
+import { Satellite, Monitor, Send, ShieldAlert, RotateCcw, Globe, Battery, Thermometer, Radio, Crosshair, Camera, Sun, Moon } from 'lucide-react';
 import html2canvas from 'html2canvas';
+import { useTheme } from '../hooks/useTheme';
 
 function Clock() {
   const [time, setTime] = useState(new Date());
@@ -50,13 +51,14 @@ function SatHealthStrip({ telemetry }) {
 
 export default function Header({ view, setView, health, onReset, alertCount = 0, telemetry }) {
   const [snapping, setSnapping] = useState(false);
+  const { theme, toggleTheme } = useTheme();
 
   const handleSnapshot = useCallback(async () => {
     setSnapping(true);
     try {
       const root = document.getElementById('root');
       const canvas = await html2canvas(root, {
-        backgroundColor: '#000000',
+        backgroundColor: theme === 'dark' ? '#000000' : '#f5f5f5',
         scale: 2,
         useCORS: true,
         logging: false,
@@ -102,6 +104,13 @@ export default function Header({ view, setView, health, onReset, alertCount = 0,
         <SatHealthStrip telemetry={telemetry} />
         <Clock />
         <button
+          className="theme-toggle"
+          onClick={toggleTheme}
+          title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+        >
+          {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+        </button>
+        <button
           className="nav-btn"
           onClick={handleSnapshot}
           title="Capture Dashboard Snapshot"
@@ -120,6 +129,11 @@ export default function Header({ view, setView, health, onReset, alertCount = 0,
           <span className={`status-dot ${health}`} />
           {health === 'online' ? 'LINK ACTIVE' : 'NO SIGNAL'}
         </div>
+        <img
+          src="/company-logo.png"
+          alt="Company Logo"
+          className="header-company-logo"
+        />
       </div>
     </header>
   );
