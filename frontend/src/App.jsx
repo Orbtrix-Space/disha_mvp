@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { useWebSocket } from './hooks/useWebSocket';
 import { api } from './services/api';
+import { ThemeProvider } from './hooks/useTheme';
 import Header from './components/Header';
 import ControlDashboard from './pages/ControlDashboard';
 import FlightDashboard from './pages/FlightDashboard';
@@ -63,9 +64,11 @@ function AppContent() {
 
 function App() {
   return (
-    <BrowserRouter>
-      <AppContent />
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <AppContent />
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }
 

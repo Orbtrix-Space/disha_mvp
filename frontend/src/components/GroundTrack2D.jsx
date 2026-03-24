@@ -24,9 +24,9 @@ function loadStationsToMap(map, layerGroup) {
       const color = getStationColor(gs.name);
       const gsIcon = L.divIcon({
         className: 'gs-marker-2d',
-        html: `<div style="width:8px;height:8px;border-radius:50%;background:${color};box-shadow:0 0 6px ${color};"></div>`,
-        iconSize: [8, 8],
-        iconAnchor: [4, 4],
+        html: `<div style="display:flex;align-items:center;gap:2px;"><span style="font-size:14px;filter:drop-shadow(0 0 4px ${color});">📡</span></div>`,
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
       });
       L.marker([lat, lon], { icon: gsIcon })
         .bindTooltip(gs.name, {
@@ -52,12 +52,14 @@ function loadStationsToMap(map, layerGroup) {
 
 export default function GroundTrack2D({ telemetry, groundNetworkVersion }) {
   const containerRef = useRef(null);
+  const tileLayerRef = useRef(null);
   const mapRef = useRef(null);
   const satMarkerRef = useRef(null);
   const trailLineRef = useRef(null);
   const predictLineRef = useRef(null);
   const trailRef = useRef([]);
   const stationLayerRef = useRef(null);
+  const [followSat, setFollowSat] = useState(true);
 
   // Initialize Leaflet map
   useEffect(() => {
@@ -72,11 +74,17 @@ export default function GroundTrack2D({ telemetry, groundNetworkVersion }) {
       maxZoom: 12,
     });
 
-    // CartoDB Dark Matter tiles (free, dark theme)
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd',
-      maxZoom: 19,
-    }).addTo(map);
+    // Satellite imagery tiles (ArcGIS World Imagery - free, accurate colors)
+    tileLayerRef.current = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 19, attribution: 'Esri, Maxar, Earthstar Geographics' }
+    ).addTo(map);
+
+    // Country borders + labels overlay
+    L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 19, pane: 'overlayPane' }
+    ).addTo(map);
 
     // Satellite marker (pulsing cyan dot)
     const satIcon = L.divIcon({
@@ -107,6 +115,9 @@ export default function GroundTrack2D({ telemetry, groundNetworkVersion }) {
     // Zoom control in bottom-right
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
+    // Stop following when user drags the map
+    map.on('dragstart', () => setFollowSat(false));
+
     mapRef.current = map;
 
     // Add ground stations (initial load)
@@ -119,6 +130,8 @@ export default function GroundTrack2D({ telemetry, groundNetworkVersion }) {
     };
   }, []);
 
+  // Satellite imagery doesn't change with theme — no tile swap needed
+
   // Update satellite position and trail
   useEffect(() => {
     if (!telemetry || !mapRef.current || !satMarkerRef.current) return;
@@ -129,8 +142,10 @@ export default function GroundTrack2D({ telemetry, groundNetworkVersion }) {
     // Update marker
     satMarkerRef.current.setLatLng(latLng);
 
-    // Pan map to follow satellite (smooth)
-    mapRef.current.panTo(latLng, { animate: true, duration: 0.5 });
+    // Pan map to follow satellite (only when follow mode is on)
+    if (followSat) {
+      mapRef.current.panTo(latLng, { animate: true, duration: 0.5 });
+    }
 
     // Update trail
     const trail = trailRef.current;
@@ -194,6 +209,14 @@ export default function GroundTrack2D({ telemetry, groundNetworkVersion }) {
   return (
     <div className="ground-track-panel">
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+      {!followSat && (
+        <button
+          className="map-recenter-btn"
+          onClick={() => setFollowSat(true)}
+        >
+          RE-CENTER
+        </button>
+      )}
     </div>
   );
 }
