@@ -713,6 +713,125 @@ function EventTimeline({ telemetry }) {
 }
 
 /* ═══════════════════════════════════════════════════
+   Maneuver & ΔV Planner
+   ═══════════════════════════════════════════════════ */
+const MANEUVER_TYPES = ['Orbit Raise', 'Plane Change', 'Phasing', 'Deorbit', 'Station Keeping'];
+const STATUS_COLORS = { PLANNED: '#eab308', READY: '#5eead4', EXECUTING: '#f97316', COMPLETED: '#555' };
+
+function ManeuverPlanner() {
+  // Deterministic placeholder maneuver data
+  const [maneuver] = useState(() => ({
+    type: 'Orbit Raise',
+    scheduled: new Date(Date.now() + 4800000).toISOString(), // +80min
+    dv_ms: 2.35,
+    burn_sec: 45,
+    thruster: 'RCS-1 (1N)',
+    status: 'PLANNED',
+  }));
+
+  const [budget] = useState({ total: 120, used: 14.8 });
+  const remaining = budget.total - budget.used;
+  const usedPct = (budget.used / budget.total) * 100;
+
+  // Countdown
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const schedMs = new Date(maneuver.scheduled).getTime();
+  const diffSec = Math.max(0, Math.round((schedMs - now) / 1000));
+  const countdownStr = `${String(Math.floor(diffSec / 3600)).padStart(2, '0')}:${String(Math.floor((diffSec % 3600) / 60)).padStart(2, '0')}:${String(diffSec % 60).padStart(2, '0')}`;
+
+  // Transfer trajectory preview (simple SVG parabola)
+  const trajW = 200;
+  const trajH = 50;
+  const trajPoints = [];
+  for (let i = 0; i <= 20; i++) {
+    const t = i / 20;
+    const x = t * trajW;
+    const y = trajH - (4 * trajH * 0.8 * t * (1 - t)) - 4;
+    trajPoints.push(`${x},${y}`);
+  }
+
+  return (
+    <div className="flt2-card flt2-maneuver">
+      <div className="flt2-header">
+        <Zap size={12} /> MANEUVER PLANNING
+        <span className="flt2-badge" style={{
+          color: STATUS_COLORS[maneuver.status],
+          background: `${STATUS_COLORS[maneuver.status]}15`,
+        }}>{maneuver.status}</span>
+      </div>
+      <div className="flt2-body">
+        {/* (A) Upcoming Maneuver */}
+        <div className="mnv-section">
+          <div className="mnv-row">
+            <span className="mnv-label">Type</span>
+            <span className="mnv-val">{maneuver.type}</span>
+          </div>
+          <div className="mnv-row">
+            <span className="mnv-label">T-Burn</span>
+            <span className="mnv-val mnv-countdown">{countdownStr}</span>
+          </div>
+          <div className="mnv-row">
+            <span className="mnv-label">ΔV</span>
+            <span className="mnv-val mnv-dv">{maneuver.dv_ms} m/s</span>
+          </div>
+          <div className="mnv-row">
+            <span className="mnv-label">Duration</span>
+            <span className="mnv-val">{maneuver.burn_sec}s</span>
+          </div>
+          <div className="mnv-row">
+            <span className="mnv-label">Thruster</span>
+            <span className="mnv-val">{maneuver.thruster}</span>
+          </div>
+        </div>
+
+        {/* (B) ΔV Budget */}
+        <div className="mnv-section mnv-budget">
+          <div className="mnv-budget-header">
+            <span>ΔV BUDGET</span>
+            <span className="mnv-budget-remain">{remaining.toFixed(1)} m/s remaining</span>
+          </div>
+          <div className="mnv-budget-bar">
+            <div className="mnv-budget-fill" style={{ width: `${usedPct}%` }} />
+          </div>
+          <div className="mnv-budget-labels">
+            <span>Used: {budget.used} m/s</span>
+            <span>Total: {budget.total} m/s</span>
+          </div>
+        </div>
+
+        {/* (C) Transfer Preview */}
+        <div className="mnv-section mnv-preview">
+          <svg viewBox={`0 0 ${trajW} ${trajH}`} width="100%" height={trajH} preserveAspectRatio="none">
+            {/* Orbit arcs */}
+            <line x1="0" y1={trajH - 4} x2={trajW} y2={trajH - 4} stroke="#1a1a1a" strokeWidth="1" />
+            <line x1="0" y1="8" x2={trajW} y2="8" stroke="#1a1a1a" strokeWidth="1" strokeDasharray="4,4" />
+            {/* Transfer arc */}
+            <polyline points={trajPoints.join(' ')} fill="none" stroke="#eab308" strokeWidth="1.5" strokeDasharray="4,3" opacity="0.7" />
+            {/* Burn point */}
+            <circle cx="0" cy={trajH - 4} r="3" fill="#5eead4" />
+            {/* Arrival */}
+            <circle cx={trajW} cy="8" r="3" fill="#eab308" />
+          </svg>
+          <div className="mnv-preview-label">Transfer Trajectory Preview</div>
+        </div>
+
+        {/* (D) Quick Actions — placeholder hooks */}
+        <div className="mnv-actions">
+          <button className="mnv-action-btn">Simulate</button>
+          <button className="mnv-action-btn">Optimize ΔV</button>
+          <button className="mnv-action-btn mnv-action-primary">Upload</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
    MAIN DASHBOARD
    ═══════════════════════════════════════════════════ */
 export default function FlightDashboard({ telemetry, onNetworkChange }) {
@@ -739,10 +858,11 @@ export default function FlightDashboard({ telemetry, onNetworkChange }) {
         <VisibilitySummary telemetry={telemetry} />
       </div>
 
-      {/* BOTTOM — Orbital Elements + Event Timeline */}
+      {/* BOTTOM — Orbital Elements + Event Timeline + Maneuver Planner */}
       <div className="flt2-bottom">
         <OrbitalElements />
         <EventTimeline telemetry={telemetry} />
+        <ManeuverPlanner />
       </div>
     </div>
   );

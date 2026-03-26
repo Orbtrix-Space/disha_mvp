@@ -35,9 +35,8 @@
   --radius-md: 10px;
   --radius-lg: 14px;
 
-  /* Global adaptive scaling — all rem values scale with this */
-  /* 18px at 1366w, 20px at 1920w, 22px at 2560w */
-  font-size: clamp(18px, 1.05vw, 22px);
+  /* Base font-size — 16px default, overridden by UI Scale Control */
+  font-size: 16px;
 
   /* Standard spacing tokens */
   --sp-xs: clamp(2px, 0.2vw, 4px);
@@ -286,9 +285,9 @@ body {
   display: grid;
   height: 100%;
   overflow: hidden;
-  /* Default layout — no drag handles visible */
+  padding: 0;
   grid-template-columns: 39fr 35fr 26fr;
-  grid-template-rows: 1fr 6px clamp(140px, 20vh, 220px);
+  grid-template-rows: 1fr 6px clamp(160px, 22vh, 240px);
   grid-template-areas:
     "globe  center  sidebar"
     "hrow   hrow    hrow"
@@ -297,8 +296,93 @@ body {
 
 .control-globe      { position: relative; overflow: hidden; }
 .control-map        { position: relative; overflow: hidden; }
-.control-sidebar    { overflow: hidden; border-left: 1px solid var(--border-primary); }
+.control-sidebar    { overflow-y: auto; overflow-x: hidden; border-left: 1px solid var(--border-primary); }
 .control-strip-area { border-top: 1px solid var(--border-primary); overflow: hidden; }
+
+/* ── Bottom Grid: Tabbed panel + Ground Contact ── */
+.ctrl-bottom-grid {
+  display: grid;
+  grid-template-columns: 1fr clamp(200px, 18vw, 320px);
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Tabbed Log/Terminal */
+.ctrl-tabbed {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border-right: 1px solid var(--border-primary);
+}
+
+.ctrl-tab-bar {
+  display: flex;
+  gap: 0;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-primary);
+  flex-shrink: 0;
+}
+
+.ctrl-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ctrl-tab-btn:hover {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.ctrl-tab-btn.active {
+  color: var(--accent-cyan);
+  border-bottom-color: var(--accent-cyan);
+  background: rgba(45, 212, 191, 0.04);
+}
+
+.ctrl-tab-content {
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Force EventLog/CommandTerminal to fill tab content */
+.ctrl-tab-content .cs-panel {
+  height: 100%;
+  border-right: none;
+}
+
+.ctrl-tab-content .cs-panel-header {
+  display: none; /* tab bar replaces this */
+}
+
+/* Ground Contact — always visible fixed widget */
+.ctrl-ground-contact {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-secondary);
+}
+
+.ctrl-ground-contact .cs-panel {
+  height: 100%;
+  border-right: none;
+}
+
+.ctrl-ground-contact .cs-panel-header {
+  padding: 6px 12px;
+}
 
 /* Resize handles */
 .resize-handle {
@@ -1876,10 +1960,254 @@ body {
 
 .schedule-input-col {
   background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
-.schedule-input-col .schedule-col-body {
-  padding: 16px;
+/* ── Compact Task Input Body ── */
+.sched-input-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  scrollbar-width: thin;
+}
+
+/* City buttons — compact auto-fill grid */
+.sched-city-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 4px;
+  max-height: 80px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.sched-city-btn {
+  padding: 4px 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 3px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sched-city-btn:hover {
+  border-color: var(--accent-blue);
+  color: var(--text-primary);
+  background: var(--bg-card-hover);
+}
+
+/* Lat/Lon + Add row */
+.sched-coord-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.sched-coord-input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px !important;
+  font-size: 12px !important;
+}
+
+.sched-add-btn {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(45, 212, 191, 0.08);
+  border: 1px solid rgba(45, 212, 191, 0.2);
+  border-radius: 4px;
+  color: var(--accent-cyan);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.sched-add-btn:hover:not(:disabled) {
+  background: rgba(45, 212, 191, 0.15);
+  border-color: var(--accent-cyan);
+}
+
+.sched-add-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* Priority — segmented control */
+.sched-priority-seg {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.sched-pri-opt {
+  flex: 1;
+  padding: 4px 0;
+  background: var(--bg-card);
+  border: none;
+  border-right: 1px solid var(--border-primary);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.12s;
+}
+
+.sched-pri-opt:last-child { border-right: none; }
+.sched-pri-opt:hover { color: var(--text-secondary); background: var(--bg-card-hover); }
+.sched-pri-opt.active.high { background: rgba(239, 68, 68, 0.12); color: #ef4444; }
+.sched-pri-opt.active.medium { background: rgba(234, 179, 8, 0.12); color: #eab308; }
+.sched-pri-opt.active.low { background: rgba(94, 234, 212, 0.12); color: #5eead4; }
+
+/* Target list area */
+.sched-target-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sched-target-header {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.sched-target-list {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sched-target-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 3px;
+  min-height: 0;
+}
+
+.sched-target-pri {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.sched-target-pri.high { color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+.sched-target-pri.medium { color: #eab308; background: rgba(234, 179, 8, 0.1); }
+.sched-target-pri.low { color: #5eead4; background: rgba(94, 234, 212, 0.1); }
+
+.sched-target-name {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.sched-target-rm {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+}
+
+.sched-target-rm:hover { color: var(--accent-red); }
+
+/* Sticky action bar */
+.sched-action-bar {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  flex-shrink: 0;
+}
+
+.sched-action-clear {
+  padding: 6px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.sched-action-clear:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.sched-action-gen {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(45, 212, 191, 0.1);
+  border: 1px solid rgba(45, 212, 191, 0.3);
+  border-radius: 4px;
+  color: var(--accent-cyan);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.sched-action-gen:hover:not(:disabled) {
+  background: rgba(45, 212, 191, 0.18);
+  border-color: var(--accent-cyan);
+}
+
+.sched-action-gen:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .schedule-results-col {
@@ -2013,8 +2341,10 @@ body {
 
 .control-strip {
   display: grid;
-  grid-template-columns: 1fr 1.2fr clamp(160px, 14vw, 240px);
+  grid-template-columns: 1fr 1.2fr clamp(200px, 18vw, 320px);
   background: var(--bg-secondary);
+  height: 100%;
+  overflow: hidden;
 }
 
 .cs-panel {
@@ -2246,8 +2576,10 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 8px;
+  padding: 12px;
   gap: 4px;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .cs-pass-status {
@@ -2255,7 +2587,7 @@ body {
   align-items: center;
   gap: 5px;
   font-family: var(--font-mono);
-  font-size: 0.55rem;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 1px;
 }
@@ -2284,15 +2616,18 @@ body {
 
 .cs-pass-station {
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: 13px;
   font-weight: 700;
   color: var(--text-secondary);
   text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cs-pass-countdown {
   font-family: var(--font-mono);
-  font-size: 1.6rem;
+  font-size: clamp(16px, 1.4vw, 24px);
   font-weight: 800;
   color: var(--accent-cyan);
   letter-spacing: 2px;
@@ -2301,7 +2636,7 @@ body {
 
 .cs-pass-label {
   font-family: var(--font-mono);
-  font-size: 0.5rem;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 1.5px;
   color: var(--text-muted);
@@ -2311,9 +2646,137 @@ body {
   display: flex;
   gap: 12px;
   font-family: var(--font-mono);
-  font-size: 0.55rem;
+  font-size: 12px;
   color: var(--text-muted);
 }
+
+/* ── Enhanced Ground Pass ── */
+.cs-pass-progress {
+  width: 100%;
+  height: 4px;
+  background: var(--border-primary);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 4px 0;
+}
+
+.cs-pass-progress-fill {
+  height: 100%;
+  background: #00FFA3;
+  border-radius: 2px;
+  transition: width 1s linear;
+}
+
+.cs-pass-detail-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  font-family: var(--font-mono);
+  width: 100%;
+  padding: 0 4px;
+}
+
+.cs-pass-detail-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cs-pass-detail-val {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cs-pass-next-preview {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 4px 8px;
+  background: rgba(255, 200, 87, 0.06);
+  border: 1px solid rgba(255, 200, 87, 0.15);
+  border-radius: 4px;
+  width: 100%;
+}
+
+.cs-pass-next-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  color: #FFC857;
+  letter-spacing: 1px;
+}
+
+.cs-pass-next-station {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.cs-pass-next-time {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: #FFC857;
+  flex-shrink: 0;
+}
+
+.cs-pass-upcoming {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.cs-pass-upcoming-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cs-pass-upcoming-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #FFC857;
+}
+
+.cs-pass-upcoming-station {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cs-pass-countdown-sm {
+  font-size: 1.1rem !important;
+}
+
+/* Color states for pass status */
+.cs-pass-status.blackout { color: #FF4D4D; }
+.cs-pass-dot.blackout {
+  background: #FF4D4D;
+  box-shadow: 0 0 8px rgba(255, 77, 77, 0.5);
+  animation: pass-blink 1s ease-in-out infinite;
+}
+.blackout-timer { color: #FF4D4D !important; text-shadow: 0 0 12px rgba(255, 77, 77, 0.3) !important; }
 
 /* ============================================
    SPARKLINE CARDS
@@ -2768,15 +3231,7 @@ body {
 }
 
 /* Pass panel blackout state */
-.cs-pass-status.blackout {
-  color: var(--accent-red);
-}
-
-.cs-pass-dot.blackout {
-  background: var(--accent-red);
-  box-shadow: 0 0 6px rgba(239, 68, 68, 0.4);
-  animation: blackout-blink 2s ease-in-out infinite;
-}
+/* old blackout styles removed — now in enhanced ground pass section */
 
 .blackout-timer {
   color: var(--accent-red) !important;
@@ -2828,7 +3283,13 @@ body {
 .flt2-left   { grid-area: left;   display: flex; flex-direction: column; gap: clamp(4px, 0.4vh, 7px); overflow: hidden; min-height: 0; }
 .flt2-center { grid-area: center; display: flex; flex-direction: column; gap: clamp(4px, 0.4vh, 7px); overflow: hidden; min-height: 0; }
 .flt2-right  { grid-area: right;  display: flex; flex-direction: column; gap: clamp(4px, 0.4vh, 7px); overflow: hidden; min-height: 0; }
-.flt2-bottom { grid-area: bottom; display: grid; grid-template-columns: 1fr 1fr; gap: clamp(5px, 0.4vw, 8px); overflow: hidden; }
+.flt2-bottom { grid-area: bottom; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: clamp(5px, 0.4vw, 8px); overflow: hidden; }
+
+/* Laptop: maneuver collapses — 2 cols + maneuver hidden */
+@media (max-width: 1599px) {
+  .flt2-bottom { grid-template-columns: 1fr 1fr; }
+  .flt2-bottom .flt2-maneuver { display: none; }
+}
 
 /* Card base — larger text for readability */
 .flt2-card {
@@ -3268,6 +3729,164 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ══════════════════════════════════════════════════
+   MANEUVER & ΔV PLANNER
+   ══════════════════════════════════════════════════ */
+
+.flt2-maneuver .flt2-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.mnv-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mnv-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1px 0;
+}
+
+.mnv-label {
+  font-family: var(--font-mono);
+  font-size: clamp(0.52rem, 0.6vw, 0.72rem);
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.mnv-val {
+  font-family: var(--font-mono);
+  font-size: clamp(0.58rem, 0.65vw, 0.78rem);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.mnv-countdown {
+  color: var(--accent-cyan);
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.mnv-dv {
+  color: #eab308;
+  font-weight: 800;
+  font-size: clamp(0.65rem, 0.75vw, 0.9rem);
+}
+
+/* ΔV Budget */
+.mnv-budget {
+  padding-top: 4px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.mnv-budget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: clamp(0.48rem, 0.55vw, 0.65rem);
+  color: var(--text-muted);
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.mnv-budget-remain {
+  color: var(--accent-green);
+  font-weight: 700;
+}
+
+.mnv-budget-bar {
+  height: 4px;
+  background: var(--border-primary);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 3px 0;
+}
+
+.mnv-budget-fill {
+  height: 100%;
+  background: var(--accent-cyan);
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+.mnv-budget-labels {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: clamp(0.42rem, 0.5vw, 0.58rem);
+  color: var(--text-muted);
+}
+
+/* Transfer Preview */
+.mnv-preview {
+  padding-top: 4px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.mnv-preview svg {
+  display: block;
+}
+
+.mnv-preview-label {
+  font-family: var(--font-mono);
+  font-size: clamp(0.42rem, 0.48vw, 0.55rem);
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 2px;
+  letter-spacing: 0.5px;
+}
+
+/* Quick Actions */
+.mnv-actions {
+  display: flex;
+  gap: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border-primary);
+}
+
+.mnv-action-btn {
+  flex: 1;
+  padding: 4px 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: clamp(0.42rem, 0.5vw, 0.58rem);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.mnv-action-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+  background: var(--bg-card-hover);
+}
+
+.mnv-action-primary {
+  color: var(--accent-cyan);
+  border-color: rgba(45, 212, 191, 0.3);
+}
+
+.mnv-action-primary:hover {
+  background: rgba(45, 212, 191, 0.08);
+  border-color: var(--accent-cyan);
 }
 
 /* ── State Vector Sparklines ── */
@@ -4796,6 +5415,47 @@ body {
 }
 
 /* Theme toggle button */
+/* UI Scale dropdown */
+.ui-scale-wrap { position: relative; }
+
+.ui-scale-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-sm);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  min-width: 80px;
+  overflow: hidden;
+}
+
+.ui-scale-opt {
+  padding: 6px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.ui-scale-opt:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.ui-scale-opt.active {
+  color: var(--accent-cyan);
+  background: rgba(45, 212, 191, 0.08);
+}
+
 .theme-toggle {
   display: flex;
   align-items: center;

@@ -1,7 +1,50 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Satellite, Monitor, Send, ShieldAlert, RotateCcw, Globe, Battery, Thermometer, Radio, Crosshair, Camera, Sun, Moon } from 'lucide-react';
+import { Satellite, Monitor, Send, ShieldAlert, RotateCcw, Globe, Battery, Thermometer, Radio, Crosshair, Camera, Sun, Moon, ZoomIn } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { useTheme } from '../hooks/useTheme';
+
+/* UI Scale Control — applies CSS scale to :root font-size */
+const SCALE_OPTIONS = [
+  { label: '80%', value: 0.8 },
+  { label: '90%', value: 0.9 },
+  { label: '100%', value: 1.0 },
+  { label: '110%', value: 1.1 },
+];
+
+function UIScaleControl() {
+  const [scale, setScale] = useState(() => {
+    try { return parseFloat(localStorage.getItem('disha_ui_scale')) || 1.0; }
+    catch { return 1.0; }
+  });
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--ui-scale', scale);
+    // Scale base font-size: default 16px * scale
+    const basePx = Math.round(16 * scale);
+    document.documentElement.style.fontSize = `${basePx}px`;
+    localStorage.setItem('disha_ui_scale', String(scale));
+  }, [scale]);
+
+  return (
+    <div className="ui-scale-wrap" style={{ position: 'relative' }}>
+      <button className="nav-btn" onClick={() => setOpen(!open)} title="UI Scale">
+        <ZoomIn size={14} />
+      </button>
+      {open && (
+        <div className="ui-scale-dropdown">
+          {SCALE_OPTIONS.map(opt => (
+            <button key={opt.value}
+              className={`ui-scale-opt ${scale === opt.value ? 'active' : ''}`}
+              onClick={() => { setScale(opt.value); setOpen(false); }}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Clock() {
   const [time, setTime] = useState(new Date());
@@ -102,6 +145,7 @@ export default function Header({ view, setView, health, onReset, alertCount = 0,
 
       <div className="header-right">
         <Clock />
+        <UIScaleControl />
         <button
           className="theme-toggle"
           onClick={toggleTheme}

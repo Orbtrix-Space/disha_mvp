@@ -295,7 +295,8 @@ function CommandTerminal() {
 }
 
 /* ════════════════════════════════════════
-   PASS COUNTDOWN
+   PASS COUNTDOWN — Enhanced with progress bar,
+   AOS/LOS, duration, and next-pass preview
    ════════════════════════════════════════ */
 function PassCountdown({ contactState }) {
   const [passes, setPasses] = useState([]);
@@ -308,7 +309,6 @@ function PassCountdown({ contactState }) {
       });
     };
     fetchPasses();
-    // Refresh pass predictions every 30s so next pass always available
     const id = setInterval(fetchPasses, 30000);
     return () => clearInterval(id);
   }, []);
@@ -318,28 +318,52 @@ function PassCountdown({ contactState }) {
     return () => clearInterval(id);
   }, []);
 
-  // Use live contact state from backend if available
   const liveContact = contactState?.inContact || false;
   const liveStation = contactState?.station;
 
-  // Find next upcoming pass from predictions
+  // Find current active pass and next upcoming pass
+  const activePass = passes.find(p => {
+    const aos = new Date(p.aos_time).getTime();
+    const los = new Date(p.los_time).getTime();
+    return now >= aos && now <= los;
+  });
   const nextPass = passes.find(p => new Date(p.aos_time).getTime() > now);
+  // Next pass after the current active one (for preview during contact)
+  const nextAfterActive = activePass
+    ? passes.find(p => new Date(p.aos_time).getTime() > new Date(activePass.los_time).getTime())
+    : null;
 
-  const formatCountdown = (targetMs) => {
-    const diff = Math.max(0, targetMs - now);
+  const fmtHMS = (ms) => {
+    const diff = Math.max(0, ms);
     const h = Math.floor(diff / 3600000);
     const m = Math.floor((diff % 3600000) / 60000);
     const s = Math.floor((diff % 60000) / 1000);
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
-  const formatBlackout = (sec) => {
-    if (!sec || sec <= 0) return '--:--:--';
-    const h = Math.floor(sec / 3600);
-    const m = Math.floor((sec % 3600) / 60);
-    const s = Math.round(sec % 60);
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  const fmtTime = (iso) => {
+    try { return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+    catch { return '--:--:--'; }
   };
+
+  const fmtDuration = (sec) => {
+    if (!sec) return '--';
+    const m = Math.floor(sec / 60);
+    const s = Math.round(sec % 60);
+    return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  };
+
+  // Progress bar: percentage through current pass
+  let progressPct = 0;
+  let remainingSec = 0;
+  if (liveContact && activePass) {
+    const aos = new Date(activePass.aos_time).getTime();
+    const los = new Date(activePass.los_time).getTime();
+    const total = los - aos;
+    const elapsed = now - aos;
+    progressPct = total > 0 ? Math.min(100, Math.max(0, (elapsed / total) * 100)) : 0;
+    remainingSec = Math.max(0, (los - now) / 1000);
+  }
 
   return (
     <div className="cs-panel cs-pass">
@@ -357,10 +381,32 @@ function PassCountdown({ contactState }) {
             <Satellite size={11} style={{ marginRight: 4, verticalAlign: -1 }} />
             {liveStation}
           </div>
-          <div className="cs-pass-meta" style={{ marginTop: 6 }}>
-            <span>Elev: {contactState?.elevationDeg}°</span>
-            <span>Source: LIVE</span>
+          {/* Progress bar AOS → LOS */}
+          <div className="cs-pass-progress">
+            <div className="cs-pass-progress-fill" style={{ width: `${progressPct}%` }} />
           </div>
+          <div className="cs-pass-detail-grid">
+            <span className="cs-pass-detail-label">Elev</span>
+            <span className="cs-pass-detail-val">{contactState?.elevationDeg}°</span>
+            <span className="cs-pass-detail-label">Remain</span>
+            <span className="cs-pass-detail-val">{fmtDuration(remainingSec)}</span>
+            {activePass && (
+              <>
+                <span className="cs-pass-detail-label">AOS</span>
+                <span className="cs-pass-detail-val">{fmtTime(activePass.aos_time)}</span>
+                <span className="cs-pass-detail-label">LOS</span>
+                <span className="cs-pass-detail-val">{fmtTime(activePass.los_time)}</span>
+              </>
+            )}
+          </div>
+          {/* Next pass preview */}
+          {(nextAfterActive || nextPass) && (
+            <div className="cs-pass-next-preview">
+              <span className="cs-pass-next-label">NEXT</span>
+              <span className="cs-pass-next-station">{(nextAfterActive || nextPass).station_name}</span>
+              <span className="cs-pass-next-time">{fmtHMS(new Date((nextAfterActive || nextPass).aos_time).getTime() - now)}</span>
+            </div>
+          )}
         </div>
       ) : (
         <div className="cs-pass-body">
@@ -369,21 +415,32 @@ function PassCountdown({ contactState }) {
             BLACKOUT
           </div>
           <div className="cs-pass-countdown blackout-timer">
-            {formatBlackout(contactState?.blackoutSec)}
+            {fmtHMS((contactState?.blackoutSec || 0) * 1000)}
           </div>
           <div className="cs-pass-label">BLACKOUT DURATION</div>
           {nextPass ? (
-            <>
-              <div className="cs-pass-station" style={{ marginTop: 8, fontSize: '0.65rem', opacity: 0.7 }}>
-                Next: {nextPass.station_name}
+            <div className="cs-pass-upcoming">
+              <div className="cs-pass-upcoming-header">
+                <span className="cs-pass-upcoming-dot" />
+                <span className="cs-pass-upcoming-station">{nextPass.station_name}</span>
               </div>
-              <div className="cs-pass-countdown" style={{ fontSize: '0.9rem' }}>
-                {formatCountdown(new Date(nextPass.aos_time).getTime())}
+              <div className="cs-pass-countdown cs-pass-countdown-sm">
+                {fmtHMS(new Date(nextPass.aos_time).getTime() - now)}
               </div>
               <div className="cs-pass-label">TIME TO AOS</div>
-            </>
+              <div className="cs-pass-detail-grid">
+                <span className="cs-pass-detail-label">AOS</span>
+                <span className="cs-pass-detail-val">{fmtTime(nextPass.aos_time)}</span>
+                <span className="cs-pass-detail-label">LOS</span>
+                <span className="cs-pass-detail-val">{fmtTime(nextPass.los_time)}</span>
+                <span className="cs-pass-detail-label">Dur</span>
+                <span className="cs-pass-detail-val">{fmtDuration(nextPass.duration_sec)}</span>
+                <span className="cs-pass-detail-label">Max El</span>
+                <span className="cs-pass-detail-val">{nextPass.max_elevation_deg}°</span>
+              </div>
+            </div>
           ) : (
-            <div className="cs-pass-station" style={{ marginTop: 8, fontSize: '0.6rem', opacity: 0.5 }}>
+            <div className="cs-pass-station" style={{ marginTop: 8, fontSize: 11, opacity: 0.5 }}>
               Calculating next pass...
             </div>
           )}

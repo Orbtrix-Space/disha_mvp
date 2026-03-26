@@ -321,61 +321,61 @@ export default function SchedulePanel() {
       </div>
 
       <div className="sched-columns">
-        {/* LEFT: Task Input */}
+        {/* LEFT: Task Input — compact layout */}
         <div className="schedule-col schedule-input-col">
           <div className="schedule-col-header"><MapPin size={13} /> Task Input</div>
-          <div className="schedule-col-body">
-            <div className="quick-select-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr' }}>
+          <div className="sched-input-body">
+            {/* Location buttons — compact grid */}
+            <div className="sched-city-grid">
               {CITIES.map(c => (
-                <button key={c.name} className="quick-city-btn" onClick={() => addCity(c)}>
-                  <MapPin size={8} /> {c.name}
+                <button key={c.name} className="sched-city-btn" onClick={() => addCity(c)}>
+                  {c.name}
                 </button>
               ))}
             </div>
 
-            <div className="form-group" style={{ marginTop: 8 }}>
-              <div style={{ display: 'flex', gap: 4 }}>
-                <input className="form-input" type="number" placeholder="Lat" value={lat} onChange={e => setLat(e.target.value)} min={-90} max={90} step={0.01} />
-                <input className="form-input" type="number" placeholder="Lon" value={lon} onChange={e => setLon(e.target.value)} min={-180} max={180} step={0.01} />
-              </div>
+            {/* Lat/Lon side-by-side + Add button */}
+            <div className="sched-coord-row">
+              <input className="form-input sched-coord-input" type="number" placeholder="Lat" value={lat} onChange={e => setLat(e.target.value)} min={-90} max={90} step={0.01} />
+              <input className="form-input sched-coord-input" type="number" placeholder="Lon" value={lon} onChange={e => setLon(e.target.value)} min={-180} max={180} step={0.01} />
+              <button className="sched-add-btn" onClick={addTarget} disabled={!lat || !lon} title="Add Target">
+                <Plus size={12} />
+              </button>
             </div>
 
-            <div className="priority-select">
+            {/* Priority — segmented control */}
+            <div className="sched-priority-seg">
               {PRIORITY_LEVELS.map(p => (
-                <button key={p.value} className={`priority-option ${priority === p.value ? `selected ${p.className}` : ''}`}
+                <button key={p.value} className={`sched-pri-opt ${priority === p.value ? `active ${p.className}` : ''}`}
                   onClick={() => setPriority(p.value)}>{p.label}</button>
               ))}
             </div>
 
-            <button className="btn btn-add" onClick={addTarget} disabled={!lat || !lon} style={{ marginTop: 6 }}>
-              <Plus size={14} /> Add Target
-            </button>
-
+            {/* Target list — scrollable */}
             {targets.length > 0 && (
-              <div style={{ marginTop: 8 }}>
-                <label className="form-label">Targets ({targets.length})</label>
-                <div className="target-list">
+              <div className="sched-target-area">
+                <div className="sched-target-header">Targets ({targets.length})</div>
+                <div className="sched-target-list">
                   {targets.map(t => (
-                    <div className="target-chip" key={t.id}>
-                      <div className="target-chip-info">
-                        <span className={`target-chip-priority ${getPriorityClass(t.priority)}`}>P{t.priority}</span>
-                        <span className="target-chip-coords">
-                          {t.name ? `${t.name} (${t.lat.toFixed(2)}, ${t.lon.toFixed(2)})` : `${t.lat.toFixed(4)}, ${t.lon.toFixed(4)}`}
-                        </span>
-                      </div>
-                      <button className="target-chip-remove" onClick={() => removeTarget(t.id)}><X size={12} /></button>
+                    <div className="sched-target-chip" key={t.id}>
+                      <span className={`sched-target-pri ${getPriorityClass(t.priority)}`}>P{t.priority}</span>
+                      <span className="sched-target-name">
+                        {t.name || `${t.lat.toFixed(2)}, ${t.lon.toFixed(2)}`}
+                      </span>
+                      <button className="sched-target-rm" onClick={() => removeTarget(t.id)}><X size={10} /></button>
                     </div>
                   ))}
                 </div>
               </div>
             )}
+          </div>
 
-            <div className="form-actions" style={{ marginTop: 8 }}>
-              <button className="btn btn-secondary" onClick={clearAll} style={{ padding: '8px 12px' }}>Clear</button>
-              <button className="btn btn-primary" onClick={submitPlan} disabled={targets.length === 0 || loading}>
-                {loading ? <><span className="spinner" /> Computing...</> : <><Rocket size={14} /> Generate Plan</>}
-              </button>
-            </div>
+          {/* Sticky action bar */}
+          <div className="sched-action-bar">
+            <button className="sched-action-clear" onClick={clearAll}>Clear</button>
+            <button className="sched-action-gen" onClick={submitPlan} disabled={targets.length === 0 || loading}>
+              {loading ? <><span className="spinner" style={{ width: 12, height: 12 }} /> Plan...</> : <><Rocket size={12} /> Generate</>}
+            </button>
           </div>
         </div>
 

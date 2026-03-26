@@ -1,17 +1,15 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { History, Play } from 'lucide-react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { History, Play, FileText, Terminal } from 'lucide-react';
 import CesiumGlobe from '../components/CesiumGlobe';
 import GroundTrack2D from '../components/GroundTrack2D';
 import TelemetrySidebar from '../components/Telemetry';
 import AutonomyPanel from '../components/AutonomyPanel';
 import PopupPanel from '../components/PopupPanel';
-import LayoutManager, { LayoutWidget } from '../components/LayoutManager';
 import { EventLog, CommandTerminal, PassCountdown } from '../components/ControlStrip';
 
 function TelemetryPlayback({ history, onSelectFrame }) {
   const [scrubIndex, setScrubIndex] = useState(null);
   const isPlayback = scrubIndex !== null;
-
   const frameCount = history.length;
   if (frameCount < 20) return null;
 
@@ -20,17 +18,9 @@ function TelemetryPlayback({ history, onSelectFrame }) {
     setScrubIndex(idx);
     if (onSelectFrame) onSelectFrame(history[idx]);
   };
-
-  const exitPlayback = () => {
-    setScrubIndex(null);
-    if (onSelectFrame) onSelectFrame(null);
-  };
-
+  const exitPlayback = () => { setScrubIndex(null); if (onSelectFrame) onSelectFrame(null); };
   const elapsed = frameCount;
-  const formatElapsed = (s) => {
-    if (s < 60) return `${s}s`;
-    return `${Math.floor(s / 60)}m ${s % 60}s`;
-  };
+  const formatElapsed = (s) => s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
 
   return (
     <div className="telem-playback">
@@ -44,14 +34,8 @@ function TelemetryPlayback({ history, onSelectFrame }) {
           </button>
         )}
       </div>
-      <input
-        type="range"
-        className="telem-playback-slider"
-        min={0}
-        max={frameCount - 1}
-        value={scrubIndex ?? frameCount - 1}
-        onChange={handleScrub}
-      />
+      <input type="range" className="telem-playback-slider"
+        min={0} max={frameCount - 1} value={scrubIndex ?? frameCount - 1} onChange={handleScrub} />
       {isPlayback && (
         <div className="telem-playback-info">
           Frame {scrubIndex + 1}/{frameCount} | T-{formatElapsed(frameCount - 1 - scrubIndex)}
@@ -83,20 +67,32 @@ function DragHandle({ axis, onDrag, className }) {
     window.addEventListener('mouseup', onUp);
   }, [axis, onDrag]);
 
-  return (
-    <div
-      className={`resize-handle resize-handle-${axis} ${className || ''}`}
-      onMouseDown={handleMouseDown}
-    />
-  );
+  return <div className={`resize-handle resize-handle-${axis} ${className || ''}`} onMouseDown={handleMouseDown} />;
 }
 
-/* Default layout for the bottom strip grid (12-col, ~6 rows) */
-const STRIP_LAYOUT = [
-  { i: 'eventlog', x: 0, y: 0, w: 5, h: 6, minW: 3, minH: 4, maxH: 8 },
-  { i: 'terminal', x: 5, y: 0, w: 5, h: 6, minW: 3, minH: 4, maxH: 8 },
-  { i: 'contact',  x: 10, y: 0, w: 2, h: 6, minW: 2, minH: 4, maxH: 8 },
-];
+/* Tabbed bottom panel: Event Log | Command Terminal */
+function TabbedBottomPanel({ alerts, contactState, bufferDump, clearBufferDump }) {
+  const [tab, setTab] = useState('log');
+  return (
+    <div className="ctrl-tabbed">
+      <div className="ctrl-tab-bar">
+        <button className={`ctrl-tab-btn ${tab === 'log' ? 'active' : ''}`} onClick={() => setTab('log')}>
+          <FileText size={11} /> EVENT LOG
+        </button>
+        <button className={`ctrl-tab-btn ${tab === 'terminal' ? 'active' : ''}`} onClick={() => setTab('terminal')}>
+          <Terminal size={11} /> TERMINAL
+        </button>
+      </div>
+      <div className="ctrl-tab-content">
+        {tab === 'log' ? (
+          <EventLog alerts={alerts} contactState={contactState} bufferDump={bufferDump} clearBufferDump={clearBufferDump} />
+        ) : (
+          <CommandTerminal />
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function ControlDashboard({ telemetry, alerts, contactState, bufferDump, clearBufferDump, telemetryHistory }) {
   const containerRef = useRef(null);
@@ -133,7 +129,7 @@ export default function ControlDashboard({ telemetry, alerts, contactState, buff
       if (el) startRef.current.stripH = el.offsetHeight;
     }
     const base = startRef.current.stripH;
-    if (base) setStripH(Math.max(100, Math.min(400, base - dy)));
+    if (base) setStripH(Math.max(80, Math.min(400, base - dy)));
   }, []);
 
   useEffect(() => {
@@ -142,6 +138,7 @@ export default function ControlDashboard({ telemetry, alerts, contactState, buff
     return () => window.removeEventListener('mouseup', reset);
   }, []);
 
+  // Override CSS defaults only when user has dragged
   const controlStyle = {};
   if (globeW || sidebarW) {
     const col1 = globeW ? `${globeW}px` : '39fr';
@@ -159,7 +156,7 @@ export default function ControlDashboard({ telemetry, alerts, contactState, buff
 
   return (
     <div className="dashboard-layout control-layout" ref={containerRef} style={controlStyle}>
-      {/* Left — Globe + Map */}
+      {/* Left — Globe + Map stacked */}
       <div className="control-globe-area" style={{ gridArea: 'globe' }}>
         <div className="control-globe-inner pp-host">
           <PopupPanel title="3D GLOBE">
@@ -198,25 +195,15 @@ export default function ControlDashboard({ telemetry, alerts, contactState, buff
 
       <DragHandle axis="y" onDrag={onDragStrip} className="hrow" />
 
-      {/* Bottom — Drag/Resize enabled strip */}
+      {/* Bottom — Tabbed Log/Terminal + Ground Contact (always visible) */}
       <div className="control-strip-area" style={{ gridArea: 'strip' }}>
-        <LayoutManager pageId="control-strip" defaultLayout={STRIP_LAYOUT} cols={12} rowHeight={28}>
-          <div key="eventlog">
-            <LayoutWidget title="EVENT LOG" noPad>
-              <EventLog alerts={alerts} contactState={contactState} bufferDump={bufferDump} clearBufferDump={clearBufferDump} />
-            </LayoutWidget>
+        <div className="ctrl-bottom-grid">
+          <TabbedBottomPanel alerts={alerts} contactState={contactState}
+            bufferDump={bufferDump} clearBufferDump={clearBufferDump} />
+          <div className="ctrl-ground-contact">
+            <PassCountdown contactState={contactState} />
           </div>
-          <div key="terminal">
-            <LayoutWidget title="COMMAND TERMINAL" noPad>
-              <CommandTerminal />
-            </LayoutWidget>
-          </div>
-          <div key="contact">
-            <LayoutWidget title="GROUND CONTACT" noPad>
-              <PassCountdown contactState={contactState} />
-            </LayoutWidget>
-          </div>
-        </LayoutManager>
+        </div>
       </div>
     </div>
   );
