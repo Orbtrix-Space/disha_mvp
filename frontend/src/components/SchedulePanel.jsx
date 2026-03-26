@@ -1,20 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
-  Send,
-  Plus,
-  X,
-  MapPin,
-  Crosshair,
-  Zap,
-  Clock,
-  Target,
-  Rocket,
-  Radio,
-  CheckCircle,
-  ChevronRight,
-  AlertTriangle,
-  Shield,
+  Send, Plus, X, MapPin, Crosshair, Zap, Clock, Target, Rocket, Radio,
+  CheckCircle, ChevronRight, AlertTriangle, Shield, Battery, Database,
+  TrendingUp, Activity, Eye,
 } from 'lucide-react';
+import {
+  AreaChart, Area, XAxis, YAxis, ResponsiveContainer,
+  ReferenceLine, Tooltip, CartesianGrid,
+} from 'recharts';
 import { api } from '../services/api';
 import ScheduleTimeline from './ScheduleTimeline';
 
@@ -49,6 +42,215 @@ function formatDuration(sec) {
   return `${m}m ${s}s`;
 }
 
+function ChartTooltipContent({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="chart-tooltip">
+      <div className="chart-tooltip-label">T+{label}m</div>
+      {payload.map((p, i) => (
+        <div key={i} className="chart-tooltip-row">
+          <span style={{ color: p.color }}>{p.name}:</span> <span>{typeof p.value === 'number' ? p.value.toFixed(1) : p.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   CENTER — Intelligent Planning Display
+   (replaces "No Mission Plan" empty state)
+   ═══════════════════════════════════════════════════ */
+
+/* Mission Plan Summary */
+function PlanSummary({ result }) {
+  if (!result) return null;
+  const tasks = result.plan_details || [];
+  const totalPower = tasks.reduce((s, t) => s + (t.power_cost_wh || 0), 0);
+  const totalData = tasks.reduce((s, t) => s + (t.data_cost_gb || 0), 0);
+  const feasScore = result.feasibility_scores?.length > 0
+    ? Math.round(result.feasibility_scores.reduce((s, f) => s + (f.feasibility_score || 0), 0) / result.feasibility_scores.length * 100)
+    : 0;
+
+  return (
+    <div className="sched-card">
+      <div className="sched-card-header"><Activity size={12} /> MISSION PLAN SUMMARY</div>
+      <div className="sched-card-body">
+        <div className="sched-summary-grid">
+          <div className="sched-summary-item">
+            <span className="sched-sum-val cyan">{result.total_requests}</span>
+            <span className="sched-sum-label">Targets</span>
+          </div>
+          <div className="sched-summary-item">
+            <span className="sched-sum-val green">{result.feasible_requests}</span>
+            <span className="sched-sum-label">Feasible</span>
+          </div>
+          <div className="sched-summary-item">
+            <span className="sched-sum-val" style={{ color: result.scheduled_tasks > 0 ? '#5eead4' : '#ef4444' }}>{result.scheduled_tasks}</span>
+            <span className="sched-sum-label">Scheduled</span>
+          </div>
+          <div className="sched-summary-item">
+            <span className="sched-sum-val purple">{totalPower.toFixed(1)}</span>
+            <span className="sched-sum-label">Power (Wh)</span>
+          </div>
+          <div className="sched-summary-item">
+            <span className="sched-sum-val yellow">{totalData.toFixed(1)}</span>
+            <span className="sched-sum-label">Data (Gb)</span>
+          </div>
+          <div className="sched-summary-item">
+            <span className="sched-sum-val" style={{ color: feasScore > 70 ? '#5eead4' : feasScore > 40 ? '#eab308' : '#ef4444' }}>{feasScore}%</span>
+            <span className="sched-sum-label">Feasibility</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Constraint Evaluation */
+function ConstraintEvaluation({ result }) {
+  const health = result?.satellite_health || {};
+  const constraints = [
+    { name: 'Power', icon: Battery, pass: (health.battery_pct || 100) > 20, value: `${(health.battery_pct || 100).toFixed(1)}%`, threshold: '> 20%' },
+    { name: 'Storage', icon: Database, pass: (health.storage_pct || 0) < 95, value: `${(health.storage_pct || 0).toFixed(1)}%`, threshold: '< 95%' },
+    { name: 'Attitude', icon: Target, pass: true, value: 'NADIR', threshold: 'Stable' },
+    { name: 'Sun Angle', icon: Eye, pass: !health.in_eclipse, value: health.in_eclipse ? 'ECLIPSE' : 'SUNLIT', threshold: 'Sunlit' },
+  ];
+
+  return (
+    <div className="sched-card">
+      <div className="sched-card-header"><Shield size={12} /> CONSTRAINT EVALUATION</div>
+      <div className="sched-card-body">
+        <div className="sched-constraint-list">
+          {constraints.map((c, i) => {
+            const Icon = c.icon;
+            return (
+              <div key={i} className="sched-constraint-row">
+                <Icon size={10} style={{ color: '#666', flexShrink: 0 }} />
+                <span className="sched-cons-name">{c.name}</span>
+                <span className="sched-cons-val">{c.value}</span>
+                <span className={`sched-cons-badge ${c.pass ? 'pass' : 'fail'}`}>{c.pass ? 'PASS' : 'FAIL'}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Resource Projection (power graph) */
+function ResourceProjection() {
+  const [powerData, setPowerData] = useState(null);
+
+  useEffect(() => {
+    const fetch = () => api.getPowerPrediction().then(d => { if (d?.prediction_points) setPowerData(d); });
+    fetch();
+    const id = setInterval(fetch, 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const drainData = powerData?.prediction_points?.map(p => ({
+    t: p.time_offset_min, soc: p.soc_pct, storage: p.storage_pct,
+  })) || [];
+
+  return (
+    <div className="sched-card">
+      <div className="sched-card-header"><Zap size={12} /> RESOURCE PROJECTION</div>
+      <div className="sched-card-body">
+        {drainData.length > 0 ? (
+          <>
+            <div style={{ height: 70 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={drainData}>
+                  <defs>
+                    <linearGradient id="schedSocG" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#2dd4bf" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#2dd4bf" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
+                  <XAxis dataKey="t" tick={{ fontSize: 8, fill: '#555' }} tickFormatter={v => `${v}m`} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 8, fill: '#555' }} tickFormatter={v => `${v}%`} width={24} />
+                  <Tooltip content={<ChartTooltipContent />} />
+                  <ReferenceLine y={20} stroke="#ef4444" strokeDasharray="3 3" />
+                  <Area type="monotone" dataKey="soc" name="Battery" stroke="#2dd4bf" fill="url(#schedSocG)" strokeWidth={1.5} dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="sched-resource-stats">
+              <span>Min SOC: <b>{powerData.min_soc_pct}%</b></span>
+              <span>Margin: <b>{powerData.power_margin_wh} Wh</b></span>
+            </div>
+          </>
+        ) : (
+          <div className="sched-empty">Loading projection...</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* Pre-plan intelligence (shown before plan generation) */
+function PrePlanIntel({ targetCount }) {
+  const [powerData, setPowerData] = useState(null);
+  const [passes, setPasses] = useState([]);
+
+  useEffect(() => {
+    api.getPowerPrediction().then(d => { if (d?.prediction_points) setPowerData(d); });
+    api.getGroundStationPasses().then(d => { if (d?.passes) setPasses(d.passes.slice(0, 4)); });
+  }, []);
+
+  return (
+    <>
+      {/* Current resource state */}
+      <div className="sched-card">
+        <div className="sched-card-header"><Activity size={12} /> PLANNING READINESS</div>
+        <div className="sched-card-body">
+          <div className="sched-readiness-grid">
+            <div className="sched-readiness-item">
+              <span className="sched-ready-label">Targets Queued</span>
+              <span className="sched-ready-val" style={{ color: targetCount > 0 ? '#5eead4' : '#555' }}>{targetCount}</span>
+            </div>
+            <div className="sched-readiness-item">
+              <span className="sched-ready-label">Power Available</span>
+              <span className="sched-ready-val green">{powerData ? `${powerData.min_soc_pct}%` : '—'}</span>
+            </div>
+            <div className="sched-readiness-item">
+              <span className="sched-ready-label">Contacts (6h)</span>
+              <span className="sched-ready-val cyan">{passes.length}</span>
+            </div>
+            <div className="sched-readiness-item">
+              <span className="sched-ready-label">Margin</span>
+              <span className="sched-ready-val">{powerData ? `${powerData.power_margin_wh} Wh` : '—'}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <ResourceProjection />
+
+      {/* Upcoming windows */}
+      {passes.length > 0 && (
+        <div className="sched-card">
+          <div className="sched-card-header"><Radio size={12} /> VISIBILITY WINDOWS</div>
+          <div className="sched-card-body">
+            {passes.map((p, i) => (
+              <div key={i} className="sched-window-item">
+                <span className="sched-win-station">{p.station_name?.replace('ISTRAC ', '')}</span>
+                <span className="sched-win-time">{formatTime(p.aos_time)} → {formatTime(p.los_time)}</span>
+                <span className="sched-win-elev">{p.max_elevation_deg}°</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   MAIN SCHEDULE PANEL
+   ═══════════════════════════════════════════════════ */
 export default function SchedulePanel() {
   const [targets, setTargets] = useState([]);
   const [lat, setLat] = useState('');
@@ -61,65 +263,33 @@ export default function SchedulePanel() {
   const [approving, setApproving] = useState(false);
 
   useEffect(() => {
-    api.getGroundStationPasses().then((data) => {
-      if (data && data.passes) setPasses(data.passes.slice(0, 8));
-    });
+    api.getGroundStationPasses().then(d => { if (d?.passes) setPasses(d.passes.slice(0, 8)); });
   }, []);
 
   const addTarget = () => {
-    const latVal = parseFloat(lat);
-    const lonVal = parseFloat(lon);
-    if (isNaN(latVal) || isNaN(lonVal)) return;
-    if (latVal < -90 || latVal > 90 || lonVal < -180 || lonVal > 180) return;
-    setTargets((prev) => [
-      ...prev,
-      { lat: latVal, lon: lonVal, priority, id: Date.now() },
-    ]);
-    setLat('');
-    setLon('');
+    const latVal = parseFloat(lat), lonVal = parseFloat(lon);
+    if (isNaN(latVal) || isNaN(lonVal) || latVal < -90 || latVal > 90 || lonVal < -180 || lonVal > 180) return;
+    setTargets(prev => [...prev, { lat: latVal, lon: lonVal, priority, id: Date.now() }]);
+    setLat(''); setLon('');
   };
 
   const addCity = (city) => {
-    setTargets((prev) => [
-      ...prev,
-      {
-        lat: city.lat,
-        lon: city.lon,
-        priority: 5 + Math.floor(Math.random() * 5),
-        id: Date.now() + Math.random(),
-        name: city.name,
-      },
-    ]);
+    setTargets(prev => [...prev, { lat: city.lat, lon: city.lon, priority: 5 + Math.floor(Math.random() * 5), id: Date.now() + Math.random(), name: city.name }]);
   };
 
-  const removeTarget = (id) => {
-    setTargets((prev) => prev.filter((t) => t.id !== id));
-  };
+  const removeTarget = (id) => setTargets(prev => prev.filter(t => t.id !== id));
 
   const submitPlan = async () => {
     if (targets.length === 0) return;
-    setLoading(true);
-    setResult(null);
-    setCommandSeq(null);
-
-    const payload = targets.map((t) => ({
-      lat: t.lat,
-      lon: t.lon,
-      priority: t.priority,
-    }));
-
-    const data = await api.generatePlan(payload);
+    setLoading(true); setResult(null); setCommandSeq(null);
+    const data = await api.generatePlan(targets.map(t => ({ lat: t.lat, lon: t.lon, priority: t.priority })));
     setLoading(false);
-
     if (data) {
       setResult(data);
-      // Fetch associated command sequence
       if (data.command_sequence_id) {
         const seqs = await api.getCommandSequences();
-        if (seqs && seqs.sequences) {
-          const seq = seqs.sequences.find(
-            (s) => s.sequence_id === data.command_sequence_id
-          );
+        if (seqs?.sequences) {
+          const seq = seqs.sequences.find(s => s.sequence_id === data.command_sequence_id);
           if (seq) setCommandSeq(seq);
         }
       }
@@ -131,405 +301,213 @@ export default function SchedulePanel() {
     setApproving(true);
     const res = await api.approveCommandSequence(commandSeq.sequence_id);
     setApproving(false);
-    if (res) {
-      setCommandSeq({ ...commandSeq, status: 'APPROVED', approved_by: 'OPERATOR' });
-    }
+    if (res) setCommandSeq({ ...commandSeq, status: 'APPROVED', approved_by: 'OPERATOR' });
   };
 
-  const clearAll = () => {
-    setTargets([]);
-    setResult(null);
-    setCommandSeq(null);
-  };
+  const clearAll = () => { setTargets([]); setResult(null); setCommandSeq(null); };
+  const getPriorityClass = (p) => p >= 8 ? 'high' : p >= 4 ? 'medium' : 'low';
 
-  const getPriorityClass = (p) => {
-    if (p >= 8) return 'high';
-    if (p >= 4) return 'medium';
-    return 'low';
-  };
+  // Feasibility score
+  const overallFeasibility = useMemo(() => {
+    if (!result?.feasibility_scores?.length) return null;
+    return Math.round(result.feasibility_scores.reduce((s, f) => s + (f.feasibility_score || 0), 0) / result.feasibility_scores.length * 100);
+  }, [result]);
 
   return (
-    <div className="schedule-wrapper">
-      {/* Timeline strip at top */}
-      <ScheduleTimeline
-        passes={passes}
-        tasks={result?.plan_details || []}
-      />
+    <div className="schedule-panel-v2">
+      {/* Timeline spans full width at top */}
+      <div className="sched-timeline-area">
+        <ScheduleTimeline tasks={result?.plan_details} passes={passes} />
+      </div>
 
-      <div className="schedule-layout">
-      {/* LEFT COLUMN: Task Input */}
-      <div className="schedule-col schedule-input-col">
-        <div className="schedule-col-header">
-          <Target size={14} /> Task Input
-        </div>
-        <div className="schedule-col-body">
-          {/* Quick city select */}
-          <div className="form-group">
-            <label className="form-label">Quick Select City</label>
-            <div className="quick-select-grid">
-              {CITIES.map((city) => (
-                <button
-                  key={city.name}
-                  className="quick-city-btn"
-                  onClick={() => addCity(city)}
-                >
-                  <MapPin size={12} />
-                  {city.name}
+      <div className="sched-columns">
+        {/* LEFT: Task Input */}
+        <div className="schedule-col schedule-input-col">
+          <div className="schedule-col-header"><MapPin size={13} /> Task Input</div>
+          <div className="schedule-col-body">
+            <div className="quick-select-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr' }}>
+              {CITIES.map(c => (
+                <button key={c.name} className="quick-city-btn" onClick={() => addCity(c)}>
+                  <MapPin size={8} /> {c.name}
                 </button>
               ))}
             </div>
-          </div>
 
-          {/* Manual coordinates */}
-          <div className="form-group">
-            <label className="form-label">Manual Coordinates</label>
-            <div className="form-row">
-              <input
-                className="form-input"
-                type="number"
-                placeholder="Latitude"
-                value={lat}
-                onChange={(e) => setLat(e.target.value)}
-                min={-90}
-                max={90}
-                step={0.01}
-              />
-              <input
-                className="form-input"
-                type="number"
-                placeholder="Longitude"
-                value={lon}
-                onChange={(e) => setLon(e.target.value)}
-                min={-180}
-                max={180}
-                step={0.01}
-              />
-            </div>
-          </div>
-
-          {/* Priority */}
-          <div className="form-group">
-            <label className="form-label">Priority</label>
-            <div className="priority-select">
-              {PRIORITY_LEVELS.map((p) => (
-                <button
-                  key={p.value}
-                  className={`priority-option ${priority === p.value ? `selected ${p.className}` : ''}`}
-                  onClick={() => setPriority(p.value)}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <button className="btn btn-add" onClick={addTarget} disabled={!lat || !lon}>
-            <Plus size={16} /> Add Target
-          </button>
-
-          {/* Target list */}
-          {targets.length > 0 && (
-            <div style={{ marginTop: 16 }}>
-              <label className="form-label">Targets ({targets.length})</label>
-              <div className="target-list">
-                {targets.map((t) => (
-                  <div className="target-chip" key={t.id}>
-                    <div className="target-chip-info">
-                      <span className={`target-chip-priority ${getPriorityClass(t.priority)}`}>
-                        P{t.priority}
-                      </span>
-                      <span className="target-chip-coords">
-                        {t.name
-                          ? `${t.name} (${t.lat.toFixed(2)}, ${t.lon.toFixed(2)})`
-                          : `${t.lat.toFixed(4)}, ${t.lon.toFixed(4)}`}
-                      </span>
-                    </div>
-                    <button className="target-chip-remove" onClick={() => removeTarget(t.id)}>
-                      <X size={14} />
-                    </button>
-                  </div>
-                ))}
+            <div className="form-group" style={{ marginTop: 8 }}>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <input className="form-input" type="number" placeholder="Lat" value={lat} onChange={e => setLat(e.target.value)} min={-90} max={90} step={0.01} />
+                <input className="form-input" type="number" placeholder="Lon" value={lon} onChange={e => setLon(e.target.value)} min={-180} max={180} step={0.01} />
               </div>
             </div>
-          )}
+
+            <div className="priority-select">
+              {PRIORITY_LEVELS.map(p => (
+                <button key={p.value} className={`priority-option ${priority === p.value ? `selected ${p.className}` : ''}`}
+                  onClick={() => setPriority(p.value)}>{p.label}</button>
+              ))}
+            </div>
+
+            <button className="btn btn-add" onClick={addTarget} disabled={!lat || !lon} style={{ marginTop: 6 }}>
+              <Plus size={14} /> Add Target
+            </button>
+
+            {targets.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <label className="form-label">Targets ({targets.length})</label>
+                <div className="target-list">
+                  {targets.map(t => (
+                    <div className="target-chip" key={t.id}>
+                      <div className="target-chip-info">
+                        <span className={`target-chip-priority ${getPriorityClass(t.priority)}`}>P{t.priority}</span>
+                        <span className="target-chip-coords">
+                          {t.name ? `${t.name} (${t.lat.toFixed(2)}, ${t.lon.toFixed(2)})` : `${t.lat.toFixed(4)}, ${t.lon.toFixed(4)}`}
+                        </span>
+                      </div>
+                      <button className="target-chip-remove" onClick={() => removeTarget(t.id)}><X size={12} /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="form-actions" style={{ marginTop: 8 }}>
+              <button className="btn btn-secondary" onClick={clearAll} style={{ padding: '8px 12px' }}>Clear</button>
+              <button className="btn btn-primary" onClick={submitPlan} disabled={targets.length === 0 || loading}>
+                {loading ? <><span className="spinner" /> Computing...</> : <><Rocket size={14} /> Generate Plan</>}
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div className="form-actions">
-          <button
-            className="btn btn-secondary"
-            onClick={clearAll}
-            style={{ flex: '0 0 auto', width: 'auto', padding: '12px 16px' }}
-          >
-            Clear
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={submitPlan}
-            disabled={targets.length === 0 || loading}
-          >
-            {loading ? (
+        {/* CENTER: Results + Intelligence */}
+        <div className="schedule-col schedule-results-col">
+          <div className="schedule-col-header"><Send size={13} /> Mission Planning Engine</div>
+          <div className="schedule-col-body">
+            {loading && (
+              <div className="empty-state" style={{ paddingTop: 40 }}>
+                <span className="spinner" style={{ width: 32, height: 32 }} />
+                <div className="empty-state-desc">Computing optimal plan...</div>
+              </div>
+            )}
+
+            {!result && !loading && <PrePlanIntel targetCount={targets.length} />}
+
+            {result && !loading && (
               <>
-                <span className="spinner" /> Computing...
-              </>
-            ) : (
-              <>
-                <Rocket size={16} /> Generate Plan
+                {/* Feasibility Score Banner */}
+                {overallFeasibility != null && (
+                  <div className={`sched-feasibility-banner ${overallFeasibility > 70 ? 'pass' : overallFeasibility > 40 ? 'warn' : 'fail'}`}>
+                    <div className="sched-feas-score">{overallFeasibility}%</div>
+                    <div className="sched-feas-info">
+                      <span className="sched-feas-title">Overall Feasibility</span>
+                      <span className="sched-feas-desc">
+                        {overallFeasibility > 70 ? 'Plan is feasible with good margins' :
+                         overallFeasibility > 40 ? 'Plan feasible with constraints' : 'Plan has significant risks'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <PlanSummary result={result} />
+                <ConstraintEvaluation result={result} />
+                <ResourceProjection />
+
+                {/* Conflicts */}
+                {result.conflicts?.length > 0 && (
+                  <div className="sched-card">
+                    <div className="sched-card-header" style={{ color: '#ef4444' }}><AlertTriangle size={12} /> CONFLICTS</div>
+                    <div className="sched-card-body">
+                      {result.conflicts.map((c, i) => (
+                        <div key={i} className="sched-conflict-item">
+                          <AlertTriangle size={9} style={{ color: c.severity === 'CRITICAL' ? '#ef4444' : '#eab308', flexShrink: 0 }} />
+                          <span>{c.reason}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Task cards */}
+                {result.plan_details?.length > 0 && (
+                  <div className="sched-card">
+                    <div className="sched-card-header"><Target size={12} /> SCHEDULED TASKS</div>
+                    <div className="sched-card-body">
+                      {result.plan_details.map((task, i) => {
+                        const fs = result.feasibility_scores?.[i];
+                        return (
+                          <div key={i} className="sched-task-item">
+                            <span className="sched-task-idx">{String(i + 1).padStart(2, '0')}</span>
+                            <div className="sched-task-info">
+                              <span className="sched-task-action">{task.action}</span>
+                              <span className="sched-task-time">{formatTime(task.start_time)} → {formatTime(task.end_time)}</span>
+                            </div>
+                            <div className="sched-task-costs">
+                              <span style={{ color: '#5eead4' }}>{task.power_cost_wh?.toFixed(1)} Wh</span>
+                              <span style={{ color: '#a855f7' }}>{task.data_cost_gb?.toFixed(1)} Gb</span>
+                            </div>
+                            {fs && (
+                              <span className={`sched-task-risk ${fs.risk_level?.toLowerCase()}`}>
+                                {Math.round(fs.feasibility_score * 100)}% {fs.risk_level}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </>
             )}
-          </button>
+          </div>
         </div>
-      </div>
 
-      {/* CENTER COLUMN: Results + Passes */}
-      <div className="schedule-col schedule-results-col">
-        <div className="schedule-col-header">
-          <Send size={14} /> Schedule Results
-        </div>
-        <div className="schedule-col-body">
-          {!result && !loading && (
-            <div className="empty-state" style={{ paddingTop: 60 }}>
-              <Target size={48} />
-              <div className="empty-state-title">No Mission Plan</div>
-              <div className="empty-state-desc">
-                Add imaging targets and click "Generate Plan" to run scheduling.
+        {/* RIGHT: Telecommand Sequence */}
+        <div className="schedule-col schedule-command-col">
+          <div className="schedule-col-header"><ChevronRight size={13} /> Telecommand Sequence</div>
+          <div className="schedule-col-body">
+            {!commandSeq ? (
+              <div className="sched-empty" style={{ paddingTop: 40, textAlign: 'center' }}>
+                <Send size={24} style={{ color: '#333' }} />
+                <div style={{ color: '#444', marginTop: 8 }}>Generate a plan to see commands</div>
               </div>
-            </div>
-          )}
-
-          {loading && (
-            <div style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center',
-              justifyContent: 'center', height: 200, gap: 16,
-            }}>
-              <div className="spinner" style={{ width: 32, height: 32 }} />
-              <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                Running J2 Orbit Propagation...
-              </div>
-            </div>
-          )}
-
-          {result && (
-            <>
-              {/* Stats bar */}
-              <div className="results-stats" style={{ marginBottom: 16, flexWrap: 'wrap' }}>
-                <div className="result-stat">
-                  <div className="result-stat-value" style={{ color: 'var(--accent-cyan)' }}>
-                    {result.total_requests}
-                  </div>
-                  <div className="result-stat-label">Submitted</div>
+            ) : (
+              <>
+                <div className="command-seq-header">
+                  <div className="command-seq-id">{commandSeq.sequence_id}</div>
+                  <div className={`command-seq-status ${commandSeq.status.toLowerCase()}`}>{commandSeq.status}</div>
                 </div>
-                <div className="result-stat">
-                  <div className="result-stat-value" style={{ color: 'var(--accent-yellow)' }}>
-                    {result.feasible_requests}
-                  </div>
-                  <div className="result-stat-label">Feasible</div>
-                </div>
-                <div className="result-stat">
-                  <div className="result-stat-value" style={{ color: 'var(--accent-green)' }}>
-                    {result.scheduled_tasks}
-                  </div>
-                  <div className="result-stat-label">Scheduled</div>
-                </div>
-                <div className="result-stat">
-                  <div
-                    className="result-stat-value"
-                    style={{
-                      color: result.satellite_health?.battery_pct > 50
-                        ? 'var(--accent-green)' : 'var(--accent-red)',
-                    }}
-                  >
-                    {result.satellite_health?.battery_pct}%
-                  </div>
-                  <div className="result-stat-label">Battery After</div>
-                </div>
-              </div>
-
-              {/* Conflict warnings */}
-              {result.conflicts && result.conflicts.length > 0 && (
-                <div className="schedule-conflicts">
-                  {result.conflicts.map((c, i) => (
-                    <div key={i} className={`schedule-conflict-card ${c.severity === 'CRITICAL' ? 'critical' : 'warning'}`}>
-                      <AlertTriangle size={12} />
-                      <span>{c.reason}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Task cards with feasibility */}
-              {result.plan_details && result.plan_details.length > 0 ? (
-                <div className="task-list">
-                  {result.plan_details.map((task, i) => {
-                    const fScore = result.feasibility_scores?.[i];
-                    const scoreColor = fScore
-                      ? fScore.feasibility_score >= 0.75 ? 'var(--accent-green)'
-                        : fScore.feasibility_score >= 0.5 ? 'var(--accent-yellow)'
-                        : 'var(--accent-red)'
-                      : 'var(--text-muted)';
-                    return (
-                      <div className="task-card" key={task.task_id}>
-                        <div className="task-index">{String(i + 1).padStart(2, '0')}</div>
-                        <div className="task-info">
-                          <div className="task-id">
-                            <Crosshair size={12} style={{ display: 'inline', marginRight: 6, color: 'var(--accent-cyan)' }} />
-                            {task.task_id}
+                <div className="command-list">
+                  {commandSeq.commands.map((cmd, i) => (
+                    <div className="command-card" key={i}>
+                      <div className="command-index">{String(i + 1).padStart(2, '0')}</div>
+                      <div className="command-info">
+                        <div className="command-name">{cmd.command}</div>
+                        {cmd.parameters && Object.keys(cmd.parameters).length > 0 && (
+                          <div className="command-params">
+                            {Object.entries(cmd.parameters).map(([k, v]) => (
+                              <span key={k} className="command-param">{k}: {typeof v === 'number' ? v.toFixed(2) : String(v)}</span>
+                            ))}
                           </div>
-                          <div className="task-time">
-                            <Clock size={10} style={{ display: 'inline', marginRight: 4 }} />
-                            {new Date(task.start_time).toLocaleTimeString()} -{' '}
-                            {new Date(task.end_time).toLocaleTimeString()}
-                          </div>
-                          {fScore && (
-                            <div className="task-feasibility">
-                              <Shield size={9} style={{ color: scoreColor }} />
-                              <span style={{ color: scoreColor }}>
-                                {(fScore.feasibility_score * 100).toFixed(0)}%
-                              </span>
-                              <span className={`task-risk-tag ${fScore.risk_level.toLowerCase()}`}>
-                                {fScore.risk_level}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="task-costs">
-                          <div className="task-cost-item">
-                            <div className="task-cost-value" style={{ color: 'var(--accent-yellow)' }}>
-                              <Zap size={10} style={{ display: 'inline', marginRight: 2 }} />
-                              {task.power_cost_wh} Wh
-                            </div>
-                            <div className="task-cost-label">Power</div>
-                          </div>
-                          <div className="task-cost-item">
-                            <div className="task-cost-value" style={{ color: 'var(--accent-purple)' }}>
-                              {task.data_cost_gb.toFixed(1)} Gb
-                            </div>
-                            <div className="task-cost-label">Data</div>
-                          </div>
-                        </div>
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="empty-state">
-                  <Crosshair size={36} />
-                  <div className="empty-state-title">No Tasks Scheduled</div>
-                  <div className="empty-state-desc">
-                    No targets were visible within the planning window.
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Passes table */}
-          {passes.length > 0 && (
-            <div style={{ marginTop: 20 }}>
-              <div className="section-title" style={{ marginBottom: 10 }}>
-                <Radio size={14} /> Upcoming Contacts
-              </div>
-              <table className="pass-table" style={{ width: '100%' }}>
-                <thead>
-                  <tr>
-                    <th>Station</th>
-                    <th>AOS</th>
-                    <th>LOS</th>
-                    <th>Duration</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {passes.map((p, i) => (
-                    <tr key={i}>
-                      <td>{p.station_name}</td>
-                      <td>{formatTime(p.aos_time)}</td>
-                      <td>{formatTime(p.los_time)}</td>
-                      <td>{formatDuration(p.duration_sec)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* RIGHT COLUMN: Command Sequence Preview */}
-      <div className="schedule-col schedule-command-col">
-        <div className="schedule-col-header">
-          <ChevronRight size={14} /> Telecommand Sequence
-        </div>
-        <div className="schedule-col-body">
-          {!commandSeq ? (
-            <div className="empty-state" style={{ paddingTop: 60 }}>
-              <Send size={36} />
-              <div className="empty-state-title">No Sequence</div>
-              <div className="empty-state-desc">
-                Generate a plan to see the telecommand sequence.
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* Sequence info */}
-              <div className="command-seq-header">
-                <div className="command-seq-id">{commandSeq.sequence_id}</div>
-                <div className={`command-seq-status ${commandSeq.status.toLowerCase()}`}>
-                  {commandSeq.status}
-                </div>
-              </div>
-
-              {/* Commands list */}
-              <div className="command-list">
-                {commandSeq.commands.map((cmd, i) => (
-                  <div className="command-card" key={i}>
-                    <div className="command-index">{String(i + 1).padStart(2, '0')}</div>
-                    <div className="command-info">
-                      <div className="command-name">{cmd.command}</div>
-                      {cmd.parameters && Object.keys(cmd.parameters).length > 0 && (
-                        <div className="command-params">
-                          {Object.entries(cmd.parameters).map(([k, v]) => (
-                            <span key={k} className="command-param">
-                              {k}: {typeof v === 'number' ? v.toFixed(2) : String(v)}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+                      <div className="command-delay">+{cmd.delay_sec}s</div>
                     </div>
-                    <div className="command-delay">+{cmd.delay_sec}s</div>
+                  ))}
+                </div>
+                {commandSeq.status === 'PENDING' && (
+                  <div style={{ padding: '8px 0' }}>
+                    <button className="btn btn-primary" onClick={handleApprove} disabled={approving}>
+                      {approving ? <><span className="spinner" /> Approving...</> : <><CheckCircle size={14} /> Approve Sequence</>}
+                    </button>
                   </div>
-                ))}
-              </div>
-
-              {/* Approve button */}
-              {commandSeq.status === 'PENDING' && (
-                <div style={{ padding: '12px 0' }}>
-                  <button
-                    className="btn btn-primary"
-                    onClick={handleApprove}
-                    disabled={approving}
-                  >
-                    {approving ? (
-                      <>
-                        <span className="spinner" /> Approving...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle size={16} /> Approve Sequence
-                      </>
-                    )}
-                  </button>
-                </div>
-              )}
-
-              {commandSeq.status === 'APPROVED' && (
-                <div className="command-approved-badge">
-                  <CheckCircle size={14} />
-                  Approved by {commandSeq.approved_by || 'OPERATOR'}
-                </div>
-              )}
-            </>
-          )}
+                )}
+                {commandSeq.status === 'APPROVED' && (
+                  <div className="command-approved-badge"><CheckCircle size={12} /> Approved by {commandSeq.approved_by || 'OPERATOR'}</div>
+                )}
+              </>
+            )}
+          </div>
         </div>
-      </div>
       </div>
     </div>
   );

@@ -308,8 +308,8 @@ function PassCountdown({ contactState }) {
       });
     };
     fetchPasses();
-    // Refresh pass predictions periodically
-    const id = setInterval(fetchPasses, 60000);
+    // Refresh pass predictions every 30s so next pass always available
+    const id = setInterval(fetchPasses, 30000);
     return () => clearInterval(id);
   }, []);
 
@@ -372,7 +372,7 @@ function PassCountdown({ contactState }) {
             {formatBlackout(contactState?.blackoutSec)}
           </div>
           <div className="cs-pass-label">BLACKOUT DURATION</div>
-          {nextPass && (
+          {nextPass ? (
             <>
               <div className="cs-pass-station" style={{ marginTop: 8, fontSize: '0.65rem', opacity: 0.7 }}>
                 Next: {nextPass.station_name}
@@ -382,6 +382,10 @@ function PassCountdown({ contactState }) {
               </div>
               <div className="cs-pass-label">TIME TO AOS</div>
             </>
+          ) : (
+            <div className="cs-pass-station" style={{ marginTop: 8, fontSize: '0.6rem', opacity: 0.5 }}>
+              Calculating next pass...
+            </div>
           )}
         </div>
       )}
@@ -392,6 +396,8 @@ function PassCountdown({ contactState }) {
 /* ════════════════════════════════════════
    MAIN CONTROL STRIP (exports)
    ════════════════════════════════════════ */
+export { EventLog, CommandTerminal, PassCountdown };
+
 export default function ControlStrip({ alerts, contactState, bufferDump, clearBufferDump }) {
   return (
     <div className="control-strip">

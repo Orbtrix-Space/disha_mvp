@@ -101,7 +101,6 @@ export default function Header({ view, setView, health, onReset, alertCount = 0,
       </div>
 
       <div className="header-right">
-        <SatHealthStrip telemetry={telemetry} />
         <Clock />
         <button
           className="theme-toggle"

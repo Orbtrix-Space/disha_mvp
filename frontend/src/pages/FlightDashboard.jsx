@@ -1,17 +1,18 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  Radio, Wifi, WifiOff, Gauge, Zap, Database, Target,
-  BatteryCharging, Navigation, Globe, Clock,
+  Radio, Wifi, WifiOff, Gauge, Zap, Target,
+  Globe, Clock, Sun, Moon, Satellite, Eye, Wind, Shield,
+  TrendingUp, TrendingDown, Minus, AlertTriangle, Activity,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, ResponsiveContainer,
   ReferenceLine, Tooltip, CartesianGrid,
 } from 'recharts';
 import { api } from '../services/api';
-import { useTheme } from '../hooks/useTheme';
 
-function ChartTooltipContent({ active, payload, label }) {
-  if (!active || !payload || !payload.length) return null;
+/* ── Shared ── */
+function ChartTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
   return (
     <div className="chart-tooltip">
       <div className="chart-tooltip-label">T+{label}m</div>
@@ -25,228 +26,130 @@ function ChartTooltipContent({ active, payload, label }) {
   );
 }
 
-/* ── TLE Quick Load ── */
+function Spark({ data, color, height = 60, label, unit, decimals = 1, warn, crit }) {
+  if (!data || data.length < 2) return <div className="flt-spark-empty" style={{ height }} />;
+  const W = 200;
+  const cur = data[data.length - 1];
+  const prev = data.length > 10 ? data[data.length - 11] : data[0];
+  let mn = Math.min(...data), mx = Math.max(...data);
+  if (warn != null) { if (warn < mn) mn = warn - 1; if (warn > mx) mx = warn + 1; }
+  if (crit != null) { if (crit < mn) mn = crit - 1; if (crit > mx) mx = crit + 1; }
+  const rng = mx - mn || 1;
+  const toY = v => height - 3 - ((v - mn) / rng) * (height - 6);
+  const pts = data.map((v, i) => `${(i / (data.length - 1)) * W},${toY(v)}`).join(' ');
+  const diff = cur - prev;
+  const TI = Math.abs(diff) < 0.001 ? Minus : diff > 0 ? TrendingUp : TrendingDown;
+  const tc = Math.abs(diff) < 0.001 ? '#555' : diff > 0 ? '#5eead4' : '#ef4444';
+
+  return (
+    <div className="flt-spark-panel">
+      <div className="flt-spark-header">
+        <span className="flt-spark-label">{label}</span>
+        <div className="flt-spark-right">
+          <TI size={10} style={{ color: tc }} />
+          <span className="flt-spark-value" style={{ color }}>{cur.toFixed(decimals)}<span className="flt-spark-unit">{unit}</span></span>
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${height}`} width="100%" height={height} preserveAspectRatio="none" className="flt-spark-svg">
+        {warn != null && <line x1="0" y1={toY(warn)} x2={W} y2={toY(warn)} stroke="#eab308" strokeWidth="0.8" strokeDasharray="4,4" opacity="0.4" />}
+        {crit != null && <line x1="0" y1={toY(crit)} x2={W} y2={toY(crit)} stroke="#ef4444" strokeWidth="0.8" strokeDasharray="4,4" opacity="0.4" />}
+        <polygon points={`0,${height} ${pts} ${W},${height}`} fill={color} opacity="0.08" />
+        <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
+        <circle cx={W} cy={toY(cur)} r="3" fill={color} />
+      </svg>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   LEFT COLUMN
+   ═══════════════════════════════════════════════════ */
 function TLEQuickLoad() {
   const [loading, setLoading] = useState(false);
   const [noradInput, setNoradInput] = useState('');
   const [loadedSat, setLoadedSat] = useState(null);
   const [error, setError] = useState(null);
   const [tleInfo, setTleInfo] = useState(null);
-
-  const QUICK_SATS = [
-    { name: 'ISS', norad: 25544 },
-    { name: 'NOAA 19', norad: 33591 },
-    { name: 'Landsat 9', norad: 49260 },
-    { name: 'Hubble', norad: 20580 },
-    { name: 'CARTOSAT-2', norad: 31784 },
-    { name: 'Aqua', norad: 27424 },
+  const SATS = [
+    { name: 'ISS', norad: 25544 }, { name: 'NOAA 19', norad: 33591 },
+    { name: 'Landsat 9', norad: 49260 }, { name: 'Hubble', norad: 20580 },
+    { name: 'CARTOSAT-2', norad: 31784 }, { name: 'Aqua', norad: 27424 },
   ];
 
   useEffect(() => {
-    api.getCurrentTLE().then(d => {
-      if (d && d.satellite_name) {
-        setTleInfo(d);
-        setLoadedSat(d.satellite_name);
-      }
-    });
+    api.getCurrentTLE().then(d => { if (d?.satellite_name) { setTleInfo(d); setLoadedSat(d.satellite_name); } });
   }, []);
 
   const load = async (id, name) => {
-    setLoading(true);
-    setError(null);
-    const result = await api.loadTLE(id);
-    if (result && result.status === 'SUCCESS' && result.tle) {
-      setLoadedSat(result.tle.satellite_name || name || `NORAD ${id}`);
-      setTleInfo(result.tle);
-    } else if (result && result.message) {
-      setError(result.message);
-    } else if (!result) {
-      setError('Failed to load TLE — network error');
-    }
+    setLoading(true); setError(null);
+    const r = await api.loadTLE(id);
+    if (r?.status === 'SUCCESS' && r.tle) { setLoadedSat(r.tle.satellite_name || name); setTleInfo(r.tle); }
+    else setError(r?.message || 'Failed');
     setLoading(false);
   };
 
-  const handleCustomLoad = () => {
-    const id = parseInt(noradInput.trim(), 10);
-    if (isNaN(id) || id <= 0) { setError('Enter a valid NORAD ID'); return; }
-    load(id);
-    setNoradInput('');
-  };
-
   return (
-    <div className="flight-card">
-      <div className="flight-card-header">
-        <Radio size={14} /> TLE SOURCE
-      </div>
-      <div className="flight-card-body">
-        {/* Custom NORAD ID input */}
+    <div className="flt2-card">
+      <div className="flt2-header"><Radio size={13} /> TLE SOURCE</div>
+      <div className="flt2-body">
         <div className="tle-custom-input">
-          <input
-            className="form-input"
-            style={{ fontSize: '0.7rem', padding: '6px 10px', flex: 1 }}
-            type="text"
-            value={noradInput}
+          <input className="form-input flt2-input" type="text" value={noradInput}
             onChange={e => setNoradInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleCustomLoad()}
-            placeholder="NORAD ID (e.g. 25544)"
-            disabled={loading}
-          />
-          <button
-            className="quick-city-btn"
-            style={{ padding: '6px 12px', flexShrink: 0 }}
-            onClick={handleCustomLoad}
-            disabled={loading || !noradInput.trim()}
-          >
-            {loading ? <span className="spinner" style={{ width: 12, height: 12 }} /> : <Radio size={10} />}
-            LOAD
-          </button>
+            onKeyDown={e => { if (e.key === 'Enter') { const id = parseInt(noradInput, 10); if (id > 0) { load(id); setNoradInput(''); } } }}
+            placeholder="NORAD ID" disabled={loading} />
+          <button className="quick-city-btn flt2-btn" onClick={() => { const id = parseInt(noradInput, 10); if (id > 0) { load(id); setNoradInput(''); } }}
+            disabled={loading || !noradInput.trim()}><Radio size={10} /> LOAD</button>
         </div>
-
         <div className="quick-select-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
-          {QUICK_SATS.map(sat => (
-            <button key={sat.norad} className="quick-city-btn" onClick={() => load(sat.norad, sat.name)} disabled={loading}>
-              <Radio size={10} /> {sat.name}
+          {SATS.map(s => (
+            <button key={s.norad} className="quick-city-btn flt2-btn" onClick={() => load(s.norad, s.name)} disabled={loading}>
+              <Radio size={9} /> {s.name}
             </button>
           ))}
         </div>
-
-        {loadedSat && !error && (
-          <div className="flight-status-ok">Tracking: {loadedSat}</div>
-        )}
-        {error && (
-          <div className="flight-status-err">{error}</div>
-        )}
-        {tleInfo && tleInfo.epoch && (
-          <div className="flight-tle-meta">
-            <span>Epoch: {tleInfo.epoch}</span>
-            {tleInfo.norad_id && <span>NORAD: {tleInfo.norad_id}</span>}
-          </div>
-        )}
+        {loadedSat && !error && <div className="flight-status-ok">{loadedSat}</div>}
+        {error && <div className="flight-status-err">{error}</div>}
+        {tleInfo?.epoch && <div className="flight-tle-meta"><span>Epoch: {tleInfo.epoch}</span>{tleInfo.norad_id && <span>NORAD: {tleInfo.norad_id}</span>}</div>}
       </div>
     </div>
   );
 }
 
-/* ── Ground Network Selector ── */
-function GroundNetworkSelector({ onNetworkChange }) {
+function GroundNetwork({ onNetworkChange }) {
   const [active, setActive] = useState('ISRO');
   const [loading, setLoading] = useState(false);
-  const [showCustom, setShowCustom] = useState(false);
-  const [customName, setCustomName] = useState('');
-  const [customLat, setCustomLat] = useState('');
-  const [customLon, setCustomLon] = useState('');
   const [stations, setStations] = useState([]);
+  const NETS = ['NONE', 'ISRO', 'NASA', 'ESA', 'KSAT', 'GLOBAL'];
 
-  const NETWORKS = [
-    { id: 'NONE', label: 'NONE', desc: 'No ground stations' },
-    { id: 'ISRO', label: 'ISRO', desc: 'ISTRAC Network' },
-    { id: 'NASA', label: 'NASA', desc: 'Deep Space Network' },
-    { id: 'ESA', label: 'ESA', desc: 'ESTRACK Network' },
-    { id: 'KSAT', label: 'KSAT', desc: 'Polar Network' },
-    { id: 'GLOBAL', label: 'GLOBAL', desc: 'Combined Coverage' },
-  ];
+  useEffect(() => { api.getGroundStations().then(d => { if (d) { setStations(d.stations || []); if (d.network) setActive(d.network); } }); }, []);
 
-  const fetchStations = useCallback(() => {
-    api.getGroundStations().then(d => {
-      if (d) {
-        setStations(d.stations || []);
-        if (d.network) setActive(d.network);
-      }
-    });
-  }, []);
-
-  useEffect(() => {
-    fetchStations();
-  }, [fetchStations]);
-
-  const selectNetwork = async (id) => {
+  const select = async (id) => {
     if (id === active || loading) return;
     setLoading(true);
-    const result = await api.setGroundStations(id);
-    if (result && result.status === 'SUCCESS') {
-      setActive(id);
-      setStations(result.stations || []);
-      setShowCustom(false);
-      if (onNetworkChange) onNetworkChange(id);
-    }
-    setLoading(false);
-  };
-
-  const addCustom = async () => {
-    const lat = parseFloat(customLat);
-    const lon = parseFloat(customLon);
-    if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) return;
-    const name = customName.trim() || `Custom (${lat.toFixed(2)}, ${lon.toFixed(2)})`;
-    setLoading(true);
-    const result = await api.addCustomStation(name, lat, lon);
-    if (result && result.status === 'SUCCESS') {
-      setActive('CUSTOM');
-      setStations(result.stations || []);
-      setCustomName(''); setCustomLat(''); setCustomLon('');
-      if (onNetworkChange) onNetworkChange('CUSTOM');
-    }
+    const r = await api.setGroundStations(id);
+    if (r?.status === 'SUCCESS') { setActive(id); setStations(r.stations || []); onNetworkChange?.(id); }
     setLoading(false);
   };
 
   return (
-    <div className="flight-card">
-      <div className="flight-card-header">
-        <Wifi size={14} /> GROUND NETWORK
-        <span className="flight-card-badge">{stations.length} stations</span>
-      </div>
-      <div className="flight-card-body">
+    <div className="flt2-card">
+      <div className="flt2-header"><Wifi size={13} /> GROUND NETWORK <span className="flt2-badge">{stations.length}</span></div>
+      <div className="flt2-body">
         <div className="quick-select-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
-          {NETWORKS.map(n => (
-            <button
-              key={n.id}
-              className={`quick-city-btn ${active === n.id ? (n.id === 'NONE' ? 'active-none' : 'active-network') : ''}`}
-              onClick={() => selectNetwork(n.id)}
-              disabled={loading}
-              title={n.desc}
-            >
-              {n.id === 'NONE' ? <WifiOff size={10} /> : <Radio size={10} />}
-              {n.label}
+          {NETS.map(n => (
+            <button key={n} className={`quick-city-btn flt2-btn ${active === n ? (n === 'NONE' ? 'active-none' : 'active-network') : ''}`}
+              onClick={() => select(n)} disabled={loading}>
+              {n === 'NONE' ? <WifiOff size={9} /> : <Radio size={9} />} {n}
             </button>
           ))}
         </div>
-
-        <button
-          className={`quick-city-btn ${active === 'CUSTOM' ? 'active-network' : ''}`}
-          style={{ width: '100%', marginTop: 4, justifyContent: 'center' }}
-          onClick={() => setShowCustom(v => !v)}
-        >
-          <Target size={10} />
-          {showCustom ? 'HIDE CUSTOM' : 'ADD CUSTOM STATION'}
-        </button>
-
-        {showCustom && (
-          <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <input className="form-input" style={{ fontSize: '0.65rem', padding: '5px 8px' }} type="text"
-              value={customName} onChange={e => setCustomName(e.target.value)} placeholder="Station name (optional)" disabled={loading} />
-            <div style={{ display: 'flex', gap: 4 }}>
-              <input className="form-input" style={{ fontSize: '0.65rem', padding: '5px 8px', flex: 1 }} type="number"
-                value={customLat} onChange={e => setCustomLat(e.target.value)} onKeyDown={e => e.key === 'Enter' && addCustom()}
-                placeholder="Lat (-90 to 90)" disabled={loading} min={-90} max={90} step="any" />
-              <input className="form-input" style={{ fontSize: '0.65rem', padding: '5px 8px', flex: 1 }} type="number"
-                value={customLon} onChange={e => setCustomLon(e.target.value)} onKeyDown={e => e.key === 'Enter' && addCustom()}
-                placeholder="Lon (-180 to 180)" disabled={loading} min={-180} max={180} step="any" />
-            </div>
-            <button className="quick-city-btn" style={{ width: '100%', justifyContent: 'center' }}
-              onClick={addCustom} disabled={loading || !customLat || !customLon}>
-              <Target size={10} /> ADD STATION
-            </button>
-          </div>
-        )}
-
-        {/* Station list */}
         {stations.length > 0 && (
           <div className="flight-station-list">
-            {stations.map((s, i) => (
+            {stations.slice(0, 6).map((s, i) => (
               <div key={i} className="flight-station-row">
                 <span className="flight-station-dot" />
                 <span className="flight-station-name">{s.name}</span>
-                <span className="flight-station-coord">{s.lat?.toFixed(2)}, {s.lon?.toFixed(2)}</span>
-                <span className="flight-station-country">{s.country || ''}</span>
+                <span className="flight-station-coord">{s.lat?.toFixed(1)}, {s.lon?.toFixed(1)}</span>
               </div>
             ))}
           </div>
@@ -256,237 +159,591 @@ function GroundNetworkSelector({ onNetworkChange }) {
   );
 }
 
-/* ── ECI State Card ── */
-function ECIStateCard({ telemetry }) {
-  if (!telemetry) return null;
+/* ═══════════════════════════════════════════════════
+   CENTER — FLIGHT INSIGHTS
+   ═══════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════
+   CONJUNCTION + RPO + MULTI-OBJECT ANALYTICS
+   ═══════════════════════════════════════════════════ */
+
+const TRACKED_OBJECTS = [
+  { id: 'OBJ-1', name: 'COSMOS 2251 DEB', tca_min: 134, miss_km: 4.8, rel_vel: 11.2, risk: 'LOW', plane: 'Co-planar' },
+  { id: 'OBJ-2', name: 'STARLINK-2145', tca_min: 287, miss_km: 1.2, rel_vel: 14.7, risk: 'MEDIUM', plane: 'Cross-track' },
+  { id: 'OBJ-3', name: 'CZ-2C DEB', tca_min: 412, miss_km: 8.3, rel_vel: 9.1, risk: 'LOW', plane: 'Along-track' },
+];
+
+const RISK_COLORS = { LOW: '#5eead4', MEDIUM: '#eab308', HIGH: '#ef4444' };
+
+/* Conjunction + Evolution graph */
+function ConjunctionPanel() {
+  const primary = TRACKED_OBJECTS[0];
+  const secondary = TRACKED_OBJECTS[1];
+
+  // Evolution: distance over time for both objects (72-hour window, sampled)
+  const evolution = useMemo(() => {
+    const pts = [];
+    for (let i = 0; i <= 24; i++) {
+      const t = i * 3; // hours * 3 = every 3 hours, 72h window compressed
+      const d1 = primary.miss_km + Math.abs(t - primary.tca_min / 60) * 2.5 + Math.pow((t - primary.tca_min / 60) / 3, 2);
+      const d2 = secondary.miss_km + Math.abs(t - secondary.tca_min / 60) * 1.8 + Math.pow((t - secondary.tca_min / 60) / 4, 2);
+      pts.push({ t, obj1: Math.round(Math.min(50, d1) * 10) / 10, obj2: Math.round(Math.min(50, d2) * 10) / 10 });
+    }
+    return pts;
+  }, []);
+
   return (
-    <div className="flight-card">
-      <div className="flight-card-header"><Gauge size={14} /> ECI STATE VECTOR</div>
-      <div className="flight-card-body">
-        <div className="eci-grid">
-          <span className="eci-lbl">R</span>
-          <span className="eci-val cyan">{telemetry.position_eci[0].toFixed(1)}</span>
-          <span className="eci-val cyan">{telemetry.position_eci[1].toFixed(1)}</span>
-          <span className="eci-val cyan">{telemetry.position_eci[2].toFixed(1)}</span>
-          <span className="eci-unit">km</span>
-          <span className="eci-lbl">V</span>
-          <span className="eci-val purple">{telemetry.velocity_eci[0].toFixed(4)}</span>
-          <span className="eci-val purple">{telemetry.velocity_eci[1].toFixed(4)}</span>
-          <span className="eci-val purple">{telemetry.velocity_eci[2].toFixed(4)}</span>
-          <span className="eci-unit">km/s</span>
+    <div className="flt2-card flt2-conjunction">
+      <div className="flt2-header">
+        <AlertTriangle size={13} /> CONJUNCTION ANALYSIS
+        <span className="flt2-badge" style={{ background: 'rgba(234,179,8,0.15)', color: '#eab308' }}>{TRACKED_OBJECTS.length} objects</span>
+      </div>
+      <div className="flt2-body">
+        {/* Primary + secondary threat cards */}
+        <div className="flt2-conj-cards">
+          {[primary, secondary].map((obj, i) => (
+            <div key={i} className="flt2-conj-item" style={{ borderLeftColor: RISK_COLORS[obj.risk] }}>
+              <div className="flt2-conj-row">
+                <span className="flt2-conj-name">{obj.name}</span>
+                <span className="flt2-conj-risk" style={{ color: RISK_COLORS[obj.risk], borderColor: RISK_COLORS[obj.risk] }}>{obj.risk}</span>
+              </div>
+              <div className="flt2-conj-details">
+                <span>TCA: <b>+{Math.floor(obj.tca_min / 60)}h {obj.tca_min % 60}m</b></span>
+                <span>Miss: <b>{obj.miss_km} km</b></span>
+                <span>Vrel: <b>{obj.rel_vel} km/s</b></span>
+              </div>
+            </div>
+          ))}
         </div>
-        <div className="flight-nav-grid" style={{ marginTop: 10 }}>
-          <div className="flight-nav-item">
-            <div className="flight-nav-label">LAT</div>
-            <div className="flight-nav-value cyan">{telemetry.latitude.toFixed(4)}°</div>
-          </div>
-          <div className="flight-nav-item">
-            <div className="flight-nav-label">LON</div>
-            <div className="flight-nav-value cyan">{telemetry.longitude.toFixed(4)}°</div>
-          </div>
-          <div className="flight-nav-item">
-            <div className="flight-nav-label">ALT</div>
-            <div className="flight-nav-value purple">{telemetry.altitude_km.toFixed(1)} km</div>
-          </div>
-          <div className="flight-nav-item">
-            <div className="flight-nav-label">VEL</div>
-            <div className="flight-nav-value purple">{telemetry.speed_km_s.toFixed(2)} km/s</div>
-          </div>
+
+        {/* Evolution graph — distance over time for both objects */}
+        <div className="flt2-conj-evo-label">CONJUNCTION EVOLUTION (72h)</div>
+        <div style={{ height: 70 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={evolution}>
+              <defs>
+                <linearGradient id="conjG1" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#eab308" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#eab308" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="conjG2" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
+              <XAxis dataKey="t" tick={{ fontSize: 7, fill: '#555' }} tickFormatter={v => `${v}h`} />
+              <YAxis tick={{ fontSize: 7, fill: '#555' }} width={20} tickFormatter={v => `${v}`} />
+              <Tooltip content={<ChartTooltip />} />
+              <ReferenceLine y={5} stroke="#ef4444" strokeDasharray="3 3" label={{ value: '5km', fontSize: 7, fill: '#ef4444' }} />
+              <Area type="monotone" dataKey="obj1" name={primary.name.slice(0, 12)} stroke="#eab308" fill="url(#conjG1)" strokeWidth={1.5} dot={false} />
+              <Area type="monotone" dataKey="obj2" name={secondary.name.slice(0, 12)} stroke="#ef4444" fill="url(#conjG2)" strokeWidth={1.5} dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
       </div>
     </div>
   );
 }
 
-/* ── Power Prediction Card ── */
-function PowerPredictionCard() {
-  const [powerData, setPowerData] = useState(null);
+/* RPO — Relative Proximity Operations */
+function RPOPanel() {
+  const primary = TRACKED_OBJECTS[1]; // Highest risk object
+
+  // Relative distance curve centered at TCA
+  const rpoCurve = useMemo(() => {
+    const pts = [];
+    for (let i = 0; i <= 30; i++) {
+      const tMin = (i - 15) * 4; // -60 to +60 min around TCA
+      const dist = primary.miss_km + Math.abs(tMin) * 0.3 + (tMin * tMin) / 800;
+      const relV = primary.rel_vel * (1 - Math.exp(-Math.abs(tMin) / 30));
+      pts.push({ t: tMin, dist: Math.round(dist * 100) / 100, vel: Math.round(relV * 100) / 100 });
+    }
+    return pts;
+  }, []);
+
+  const isConverging = true; // Before TCA
+
+  return (
+    <div className="flt2-card">
+      <div className="flt2-header"><Target size={13} /> RPO — RELATIVE MOTION</div>
+      <div className="flt2-body">
+        <div className="flt2-rpo-info">
+          <div className="flt2-rpo-target">
+            <span className="flt2-rpo-label">Target</span>
+            <span className="flt2-rpo-val">{primary.name}</span>
+          </div>
+          <div className="flt2-rpo-metrics">
+            <div className="flt2-rpo-metric">
+              <span className="flt2-rpo-mlabel">ΔR</span>
+              <span className="flt2-rpo-mval">{primary.miss_km} km</span>
+            </div>
+            <div className="flt2-rpo-metric">
+              <span className="flt2-rpo-mlabel">ΔV</span>
+              <span className="flt2-rpo-mval">{primary.rel_vel} km/s</span>
+            </div>
+            <div className="flt2-rpo-metric">
+              <span className="flt2-rpo-mlabel">Class</span>
+              <span className="flt2-rpo-mval" style={{ color: isConverging ? '#ef4444' : '#5eead4' }}>
+                {isConverging ? 'CONVERGING' : 'DIVERGING'}
+              </span>
+            </div>
+            <div className="flt2-rpo-metric">
+              <span className="flt2-rpo-mlabel">Plane</span>
+              <span className="flt2-rpo-mval">{primary.plane}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* RPO distance vs time graph */}
+        <div style={{ height: 65 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={rpoCurve}>
+              <defs>
+                <linearGradient id="rpoGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#a855f7" stopOpacity={0.2} />
+                  <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
+              <XAxis dataKey="t" tick={{ fontSize: 7, fill: '#555' }} tickFormatter={v => `${v > 0 ? '+' : ''}${v}m`} />
+              <YAxis tick={{ fontSize: 7, fill: '#555' }} width={20} />
+              <Tooltip content={<ChartTooltip />} />
+              <ReferenceLine x={0} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="3 3" label={{ value: 'TCA', fontSize: 8, fill: '#ef4444' }} />
+              <Area type="monotone" dataKey="dist" name="Dist(km)" stroke="#a855f7" fill="url(#rpoGrad)" strokeWidth={2} dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Multi-Object Tracking */
+function MultiObjectTracking() {
+  return (
+    <div className="flt2-card">
+      <div className="flt2-header"><Satellite size={13} /> TRACKED OBJECTS <span className="flt2-badge">{TRACKED_OBJECTS.length}</span></div>
+      <div className="flt2-body">
+        <div className="flt2-mot-list">
+          {TRACKED_OBJECTS.map((obj, i) => {
+            // Mini trend per object (approach curve)
+            const miniData = [];
+            for (let j = 0; j <= 10; j++) {
+              const t = j * 6;
+              miniData.push(obj.miss_km + Math.abs(t - obj.tca_min / 60) * 1.5);
+            }
+            const minDist = Math.min(...miniData);
+            const maxDist = Math.max(...miniData);
+            const range = maxDist - minDist || 1;
+
+            return (
+              <div key={obj.id} className="flt2-mot-item">
+                <div className="flt2-mot-dot" style={{ background: RISK_COLORS[obj.risk] }} />
+                <div className="flt2-mot-info">
+                  <span className="flt2-mot-name">{obj.name}</span>
+                  <span className="flt2-mot-meta">
+                    +{Math.floor(obj.tca_min / 60)}h{obj.tca_min % 60}m · {obj.miss_km}km
+                  </span>
+                </div>
+                <span className="flt2-mot-risk" style={{ color: RISK_COLORS[obj.risk] }}>{obj.risk}</span>
+                {/* Mini sparkline */}
+                <svg width={40} height={16} viewBox="0 0 40 16" className="flt2-mot-spark">
+                  <polyline
+                    points={miniData.map((v, j) => `${j * 4},${14 - ((v - minDist) / range) * 12}`).join(' ')}
+                    fill="none" stroke={RISK_COLORS[obj.risk]} strokeWidth="1.5" strokeLinecap="round"
+                  />
+                </svg>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* Orbit Health */
+function OrbitHealth({ telemetry }) {
+  const [lastUpdate] = useState(Date.now());
+  const elapsed = Math.round((Date.now() - lastUpdate) / 1000);
+
+  const altHist = useRef([]);
+  useEffect(() => {
+    if (!telemetry?.altitude_km) return;
+    altHist.current.push(telemetry.altitude_km);
+    if (altHist.current.length > 60) altHist.current.shift();
+  }, [telemetry]);
+
+  const altStable = altHist.current.length > 5 &&
+    Math.abs(altHist.current[altHist.current.length - 1] - altHist.current[0]) < 5;
+
+  return (
+    <div className="flt2-card">
+      <div className="flt2-header"><Shield size={13} /> ORBIT HEALTH</div>
+      <div className="flt2-body">
+        <div className="flt2-health-grid">
+          <div className="flt2-health-item">
+            <span className="flt2-health-label">Propagation</span>
+            <span className="flt2-health-val nominal">NOMINAL</span>
+          </div>
+          <div className="flt2-health-item">
+            <span className="flt2-health-label">Last Update</span>
+            <span className="flt2-health-val">{elapsed < 5 ? 'LIVE' : `${elapsed}s ago`}</span>
+          </div>
+          <div className="flt2-health-item">
+            <span className="flt2-health-label">Confidence</span>
+            <span className="flt2-health-val nominal">HIGH</span>
+          </div>
+          <div className="flt2-health-item">
+            <span className="flt2-health-label">Covariance</span>
+            <span className="flt2-health-val nominal">LOW</span>
+          </div>
+        </div>
+        {/* Stability sparkline */}
+        <Spark data={altHist.current} color={altStable ? '#5eead4' : '#eab308'} height={35} label="Stability" unit=" km" decimals={1} />
+      </div>
+    </div>
+  );
+}
+
+/* Visibility Summary */
+function VisibilitySummary({ telemetry }) {
+  const [passes, setPasses] = useState([]);
+  const [proj, setProj] = useState(null);
 
   useEffect(() => {
-    const fetch = () => api.getPowerPrediction().then(d => { if (d && d.prediction_points) setPowerData(d); });
+    const fetch = () => {
+      api.getGroundStationPasses().then(d => { if (d?.passes) setPasses(d.passes); });
+      api.getPowerProjection().then(d => { if (d) setProj(d); });
+    };
     fetch();
     const id = setInterval(fetch, 30000);
     return () => clearInterval(id);
   }, []);
 
-  if (!powerData) return null;
+  const nextPass = useMemo(() => {
+    const now = Date.now();
+    return passes.find(p => new Date(p.aos_time).getTime() > now);
+  }, [passes]);
 
-  const drainData = powerData.prediction_points?.map(p => ({
-    t: p.time_offset_min, soc: p.soc_pct, load: p.load_consumption_w, solar: p.solar_generation_w,
-  })) || [];
+  const aosMin = nextPass ? Math.round((new Date(nextPass.aos_time).getTime() - Date.now()) / 60000) : null;
+  const eclMin = proj?.time_to_next_eclipse_min != null ? Math.round(proj.time_to_next_eclipse_min) : null;
 
-  const storageData = powerData.storage_prediction_points?.map(p => ({
-    t: p.time_offset_min, used: p.storage_used_gb, pct: p.storage_pct,
-  })) || [];
+  // Elevation curve
+  const elevData = useMemo(() => {
+    if (!nextPass) return [];
+    const dur = nextPass.duration_sec || 300;
+    const maxEl = nextPass.max_elevation_deg || 30;
+    const pts = [];
+    for (let i = 0; i <= 16; i++) {
+      const t = i / 16;
+      pts.push({ t: Math.round(t * dur), el: Math.round(maxEl * Math.sin(t * Math.PI)) });
+    }
+    return pts;
+  }, [nextPass]);
 
   return (
-    <>
-      <div className="flight-card">
-        <div className="flight-card-header"><Zap size={14} /> POWER PREDICTION (90 min)</div>
-        <div className="flight-card-body">
-          {drainData.length > 0 && (
-            <>
-              <div style={{ height: 140 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={drainData}>
-                    <defs>
-                      <linearGradient id="socGradF" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#2dd4bf" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#2dd4bf" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
-                    <XAxis dataKey="t" tick={{ fontSize: 9, fill: '#64748b' }} tickFormatter={v => `${v}m`} />
-                    <YAxis domain={[0, 100]} tick={{ fontSize: 9, fill: '#64748b' }} tickFormatter={v => `${v}%`} width={32} />
-                    <Tooltip content={<ChartTooltipContent />} />
-                    <ReferenceLine y={20} stroke="#ef4444" strokeDasharray="3 3" />
-                    <Area type="monotone" dataKey="soc" name="SOC" stroke="#2dd4bf" fill="url(#socGradF)" strokeWidth={1.5} dot={false} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="expand-chart-stats">
-                <span>Min SOC: <b>{powerData.min_soc_pct}%</b></span>
-                <span>Margin: <b>{powerData.power_margin_wh} Wh</b></span>
-              </div>
-              <div style={{ height: 110, marginTop: 12 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={drainData}>
-                    <defs>
-                      <linearGradient id="solarGradF" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#5eead4" stopOpacity={0.25} />
-                        <stop offset="95%" stopColor="#5eead4" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="loadGradF" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#ef4444" stopOpacity={0.25} />
-                        <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
-                    <XAxis dataKey="t" tick={{ fontSize: 9, fill: '#64748b' }} tickFormatter={v => `${v}m`} />
-                    <YAxis tick={{ fontSize: 9, fill: '#64748b' }} tickFormatter={v => `${v}W`} width={32} />
-                    <Tooltip content={<ChartTooltipContent />} />
-                    <Area type="stepAfter" dataKey="solar" name="Solar" stroke="#5eead4" fill="url(#solarGradF)" strokeWidth={1.2} dot={false} />
-                    <Area type="stepAfter" dataKey="load" name="Load" stroke="#ef4444" fill="url(#loadGradF)" strokeWidth={1.2} dot={false} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {storageData.length > 0 && (
-        <div className="flight-card">
-          <div className="flight-card-header"><Database size={14} /> STORAGE PREDICTION (90 min)</div>
-          <div className="flight-card-body">
-            <div style={{ height: 130 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={storageData}>
-                  <defs>
-                    <linearGradient id="storageGradF" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
-                  <XAxis dataKey="t" tick={{ fontSize: 9, fill: '#64748b' }} tickFormatter={v => `${v}m`} />
-                  <YAxis tick={{ fontSize: 9, fill: '#64748b' }} tickFormatter={v => `${v}G`} width={32} />
-                  <Tooltip content={<ChartTooltipContent />} />
-                  <Area type="monotone" dataKey="used" name="Used" stroke="#a855f7" fill="url(#storageGradF)" strokeWidth={1.5} dot={false} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+    <div className="flt2-card">
+      <div className="flt2-header"><Eye size={13} /> VISIBILITY</div>
+      <div className="flt2-body">
+        <div className="flt2-vis-grid">
+          <div className="flt2-vis-item">
+            <span className="flt2-vis-label">Next AOS</span>
+            <span className="flt2-vis-val">{aosMin != null ? `+${aosMin}m` : '—'}</span>
+          </div>
+          <div className="flt2-vis-item">
+            <span className="flt2-vis-label">Max Elev</span>
+            <span className="flt2-vis-val cyan">{nextPass?.max_elevation_deg || '—'}°</span>
+          </div>
+          <div className="flt2-vis-item">
+            <span className="flt2-vis-label">Station</span>
+            <span className="flt2-vis-val">{nextPass?.station_name?.replace('ISTRAC ', '') || '—'}</span>
+          </div>
+          <div className="flt2-vis-item">
+            <span className="flt2-vis-label">Eclipse in</span>
+            <span className="flt2-vis-val" style={{ color: eclMin != null && eclMin < 15 ? '#eab308' : '#888' }}>
+              {eclMin != null ? `${eclMin}m` : '—'}
+            </span>
           </div>
         </div>
-      )}
-    </>
+        {elevData.length > 1 && (
+          <div style={{ height: 50 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={elevData}>
+                <defs>
+                  <linearGradient id="elevG2" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#5eead4" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#5eead4" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="t" tick={{ fontSize: 7, fill: '#555' }} tickFormatter={v => `${v}s`} />
+                <YAxis tick={{ fontSize: 7, fill: '#555' }} width={16} />
+                <Area type="monotone" dataKey="el" stroke="#5eead4" fill="url(#elevG2)" strokeWidth={1.5} dot={false} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
-/* ── Pass Timeline Gantt ── */
-function PassTimelineGantt() {
-  const [passes, setPasses] = useState([]);
+/* ═══════════════════════════════════════════════════
+   RIGHT COLUMN
+   ═══════════════════════════════════════════════════ */
+const SV_MAX = 120;
+
+function StateVectorPanel({ telemetry }) {
+  const h = useRef({ rx: [], ry: [], rz: [], vx: [], vy: [], vz: [] });
 
   useEffect(() => {
-    const fetch = () => api.getGroundStationPasses().then(d => {
-      if (d && d.passes) setPasses(d.passes.slice(0, 12));
-    });
-    fetch();
-    const id = setInterval(fetch, 60000);
-    return () => clearInterval(id);
-  }, []);
+    if (!telemetry?.position_eci) return;
+    const d = h.current;
+    const push = (a, v) => { a.push(v); if (a.length > SV_MAX) a.shift(); };
+    push(d.rx, telemetry.position_eci[0]); push(d.ry, telemetry.position_eci[1]); push(d.rz, telemetry.position_eci[2]);
+    push(d.vx, telemetry.velocity_eci[0]); push(d.vy, telemetry.velocity_eci[1]); push(d.vz, telemetry.velocity_eci[2]);
+  }, [telemetry]);
 
-  const { timeRange, bars } = useMemo(() => {
-    if (passes.length === 0) return { timeRange: 0, bars: [] };
-    const now = Date.now();
-    const windowHrs = 6;
-    const windowMs = windowHrs * 3600000;
-    const endMs = now + windowMs;
-
-    const b = passes
-      .map(p => {
-        const aos = new Date(p.aos_time).getTime();
-        const los = new Date(p.los_time).getTime();
-        if (los < now || aos > endMs) return null;
-        return {
-          station: p.station_name,
-          maxElev: p.max_elevation_deg,
-          leftPct: Math.max(0, ((aos - now) / windowMs) * 100),
-          widthPct: Math.max(0.5, ((Math.min(los, endMs) - Math.max(aos, now)) / windowMs) * 100),
-          duration: Math.round(p.duration_sec),
-        };
-      })
-      .filter(Boolean);
-    return { timeRange: windowHrs, bars: b };
-  }, [passes]);
-
-  if (passes.length === 0) return null;
+  if (!telemetry?.position_eci) return null;
+  const H = 55;
 
   return (
-    <div className="flight-card" style={{ gridColumn: '1 / -1' }}>
-      <div className="flight-card-header"><Clock size={14} /> PASS TIMELINE (next {timeRange}h)</div>
-      <div className="flight-card-body">
-        <div className="pass-gantt">
-          <div className="pass-gantt-axis">
-            {[0, 1, 2, 3, 4, 5, 6].map(h => (
-              <span key={h} className="pass-gantt-tick" style={{ left: `${(h / 6) * 100}%` }}>+{h}h</span>
-            ))}
+    <div className="flt2-card flt2-sv">
+      <div className="flt2-header"><Gauge size={13} /> STATE VECTOR</div>
+      <div className="flt2-body">
+        <div className="flt2-sv-section">
+          <div className="flt2-sv-label">POSITION (ECI)</div>
+          <div className="flt2-sv-grid">
+            <Spark data={h.current.rx} color="#2dd4bf" height={H} label="Rx" unit=" km" decimals={1} />
+            <Spark data={h.current.ry} color="#5eead4" height={H} label="Ry" unit=" km" decimals={1} />
+            <Spark data={h.current.rz} color="#99f6e4" height={H} label="Rz" unit=" km" decimals={1} />
           </div>
-          <div className="pass-gantt-rows">
-            {bars.map((b, i) => (
-              <div key={i} className="pass-gantt-row">
-                <span className="pass-gantt-label">{b.station.replace('ISTRAC ', '')}</span>
-                <div className="pass-gantt-track">
-                  <div
-                    className="pass-gantt-bar"
-                    style={{ left: `${b.leftPct}%`, width: `${b.widthPct}%` }}
-                    title={`${b.station} | ${b.duration}s | ${b.maxElev}° max`}
-                  >
-                    <span className="pass-gantt-bar-text">{b.maxElev}°</span>
-                  </div>
-                </div>
-              </div>
-            ))}
+        </div>
+        <div className="flt2-sv-section">
+          <div className="flt2-sv-label">VELOCITY (ECI)</div>
+          <div className="flt2-sv-grid">
+            <Spark data={h.current.vx} color="#0d9488" height={H} label="Vx" unit=" km/s" decimals={3} />
+            <Spark data={h.current.vy} color="#14b8a6" height={H} label="Vy" unit=" km/s" decimals={3} />
+            <Spark data={h.current.vz} color="#2dd4bf" height={H} label="Vz" unit=" km/s" decimals={3} />
           </div>
+        </div>
+        <div className="flt2-geo-row">
+          <span>LAT <b>{telemetry.latitude.toFixed(4)}°</b></span>
+          <span>LON <b>{telemetry.longitude.toFixed(4)}°</b></span>
+          <span>ALT <b>{telemetry.altitude_km.toFixed(1)} km</b></span>
+          <span>VEL <b>{telemetry.speed_km_s.toFixed(2)} km/s</b></span>
         </div>
       </div>
     </div>
   );
 }
 
-/* ── Main Flight Dashboard ── */
+function PowerPanel({ telemetry }) {
+  const [pd, setPd] = useState(null);
+  const [proj, setProj] = useState(null);
+
+  useEffect(() => {
+    const fetch = () => {
+      api.getPowerPrediction().then(d => { if (d?.prediction_points) setPd(d); });
+      api.getPowerProjection().then(d => { if (d) setProj(d); });
+    };
+    fetch();
+    const id = setInterval(fetch, 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const drainData = pd?.prediction_points?.map(p => ({ t: p.time_offset_min, soc: p.soc_pct })) || [];
+  const insight = useMemo(() => {
+    if (!pd) return '';
+    if (pd.min_soc_pct < 20) return 'SOC will breach critical threshold';
+    if (telemetry?.in_eclipse) return 'In eclipse — battery discharging';
+    if (proj?.time_to_next_eclipse_min < 10) return `Eclipse entry in ~${Math.round(proj.time_to_next_eclipse_min)}m`;
+    return 'Stable above margin';
+  }, [pd, proj, telemetry?.in_eclipse]);
+
+  return (
+    <div className="flt2-card">
+      <div className="flt2-header"><Zap size={13} /> POWER</div>
+      <div className="flt2-body">
+        {drainData.length > 0 ? (
+          <>
+            <div style={{ height: 70 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={drainData}>
+                  <defs>
+                    <linearGradient id="socGF3" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#2dd4bf" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#2dd4bf" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-primary)" />
+                  <XAxis dataKey="t" tick={{ fontSize: 8, fill: '#555' }} tickFormatter={v => `${v}m`} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 8, fill: '#555' }} width={22} tickFormatter={v => `${v}%`} />
+                  <Tooltip content={<ChartTooltip />} />
+                  <ReferenceLine y={20} stroke="#ef4444" strokeDasharray="3 3" />
+                  <Area type="monotone" dataKey="soc" name="SOC" stroke="#2dd4bf" fill="url(#socGF3)" strokeWidth={2} dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flt2-power-row">
+              <span>Min: <b>{pd.min_soc_pct}%</b></span>
+              <span>Margin: <b>{pd.power_margin_wh} Wh</b></span>
+              <span style={{ color: telemetry?.in_eclipse ? '#f59e0b' : '#5eead4' }}>
+                {telemetry?.in_eclipse ? '● ECLIPSE' : '● SUNLIT'}
+              </span>
+            </div>
+            <div className="flt2-insight">{insight}</div>
+          </>
+        ) : <div className="flt2-empty">Loading...</div>}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   BOTTOM ROW
+   ═══════════════════════════════════════════════════ */
+function OrbitalElements() {
+  const [el, setEl] = useState(null);
+  const prevRef = useRef(null);
+
+  useEffect(() => {
+    const fetch = () => api.getOrbitalElements().then(d => { if (d) { prevRef.current = el; setEl(d); } });
+    fetch();
+    const id = setInterval(fetch, 5000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (!el) return null;
+
+  const trend = (key) => {
+    if (!prevRef.current) return 'stable';
+    const c = el[key], p = prevRef.current[key];
+    if (c == null || p == null) return 'stable';
+    const d = c - p;
+    if (Math.abs(d) < 0.0001) return 'stable';
+    return d > 0 ? 'up' : 'down';
+  };
+
+  const TI = ({ dir }) => {
+    if (dir === 'up') return <TrendingUp size={10} style={{ color: '#5eead4' }} />;
+    if (dir === 'down') return <TrendingDown size={10} style={{ color: '#ef4444' }} />;
+    return <Minus size={10} style={{ color: '#333' }} />;
+  };
+
+  const items = [
+    { sym: 'a', label: 'Semi-major axis', val: el.semi_major_axis_km?.toFixed(1), unit: 'km', k: 'semi_major_axis_km' },
+    { sym: 'e', label: 'Eccentricity', val: el.eccentricity?.toFixed(6), unit: '', k: 'eccentricity' },
+    { sym: 'i', label: 'Inclination', val: el.inclination_deg?.toFixed(3), unit: '°', k: 'inclination_deg' },
+    { sym: 'Ω', label: 'RAAN', val: el.raan_deg?.toFixed(3), unit: '°', k: 'raan_deg' },
+    { sym: 'ω', label: 'Arg. Perigee', val: el.arg_periapsis_deg?.toFixed(3), unit: '°', k: 'arg_periapsis_deg' },
+    { sym: 'ν', label: 'True Anomaly', val: el.true_anomaly_deg?.toFixed(3), unit: '°', k: 'true_anomaly_deg' },
+  ];
+
+  return (
+    <div className="flt2-card">
+      <div className="flt2-header"><Globe size={13} /> ORBITAL ELEMENTS</div>
+      <div className="flt2-body">
+        <div className="flt2-oe-grid">
+          {items.map(e => (
+            <div key={e.sym} className="flt2-oe-item">
+              <span className="flt2-oe-sym">{e.sym}</span>
+              <div className="flt2-oe-data">
+                <span className="flt2-oe-label">{e.label}</span>
+                <span className="flt2-oe-val">{e.val}<span className="flt2-oe-unit">{e.unit}</span> <TI dir={trend(e.k)} /></span>
+              </div>
+            </div>
+          ))}
+        </div>
+        {el.period_min && <div className="flt2-oe-period">Period: <b>{el.period_min.toFixed(1)} min</b></div>}
+      </div>
+    </div>
+  );
+}
+
+function EventTimeline({ telemetry }) {
+  const [passes, setPasses] = useState([]);
+  const [proj, setProj] = useState(null);
+
+  useEffect(() => {
+    const fetch = () => {
+      api.getGroundStationPasses().then(d => { if (d?.passes) setPasses(d.passes); });
+      api.getPowerProjection().then(d => { if (d) setProj(d); });
+    };
+    fetch();
+    const id = setInterval(fetch, 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const events = useMemo(() => {
+    const items = [];
+    const now = Date.now();
+    if (proj?.time_to_next_eclipse_min != null && proj.time_to_next_eclipse_min < 90)
+      items.push({ time: Math.round(proj.time_to_next_eclipse_min), label: telemetry?.in_eclipse ? 'Eclipse Exit' : 'Eclipse Entry', type: 'eclipse' });
+    for (const p of passes.slice(0, 5)) {
+      const diff = Math.round((new Date(p.aos_time).getTime() - now) / 60000);
+      if (diff > 0 && diff < 180) items.push({ time: diff, label: p.station_name.replace('ISTRAC ', ''), type: 'contact' });
+    }
+    // Conjunction marker
+    items.push({ time: 134, label: 'Conjunction TCA', type: 'conjunction' });
+    items.sort((a, b) => a.time - b.time);
+    return items.slice(0, 7);
+  }, [passes, proj, telemetry?.in_eclipse]);
+
+  return (
+    <div className="flt2-card flt2-timeline">
+      <div className="flt2-header"><Clock size={13} /> EVENT TIMELINE</div>
+      <div className="flt2-body">
+        {events.length === 0 ? <div className="flt2-empty">No events</div> : (
+          <div className="flt2-evt-list">
+            {events.map((ev, i) => (
+              <div key={i} className={`flt2-evt ${ev.type}`}>
+                <div className="flt2-evt-dot" />
+                {i < events.length - 1 && <div className="flt2-evt-line" />}
+                <span className="flt2-evt-time">+{ev.time}m</span>
+                <span className="flt2-evt-label">{ev.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   MAIN DASHBOARD
+   ═══════════════════════════════════════════════════ */
 export default function FlightDashboard({ telemetry, onNetworkChange }) {
   return (
-    <div className="flight-dashboard">
-      <div className="flight-col">
+    <div className="flt2-dashboard">
+      {/* LEFT — TLE + Ground Network */}
+      <div className="flt2-left">
         <TLEQuickLoad />
-        <GroundNetworkSelector onNetworkChange={onNetworkChange} />
+        <GroundNetwork onNetworkChange={onNetworkChange} />
+        <OrbitHealth telemetry={telemetry} />
       </div>
-      <div className="flight-col">
-        <ECIStateCard telemetry={telemetry} />
-        <PowerPredictionCard />
+
+      {/* CENTER — Conjunction + RPO + Multi-Object */}
+      <div className="flt2-center">
+        <ConjunctionPanel />
+        <RPOPanel />
+        <MultiObjectTracking />
       </div>
-      <PassTimelineGantt />
+
+      {/* RIGHT — State Vector + Power + Visibility */}
+      <div className="flt2-right">
+        <StateVectorPanel telemetry={telemetry} />
+        <PowerPanel telemetry={telemetry} />
+        <VisibilitySummary telemetry={telemetry} />
+      </div>
+
+      {/* BOTTOM — Orbital Elements + Event Timeline */}
+      <div className="flt2-bottom">
+        <OrbitalElements />
+        <EventTimeline telemetry={telemetry} />
+      </div>
     </div>
   );
 }

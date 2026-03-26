@@ -7,7 +7,7 @@ import json
 import os
 
 _config = None
-_config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "satellite_config.json")
+_config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config", "satellite_config.json")
 
 
 def load_config(path: str = None) -> dict:

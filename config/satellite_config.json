@@ -72,6 +72,101 @@
     {"parameter": "storage_pct", "threshold": 90, "weight": 0.12, "category": "STORAGE", "operator": ">", "message": "Storage above 90%"},
     {"parameter": "altitude", "threshold": 250, "weight": 0.30, "category": "ORBIT", "operator": "<", "message": "Altitude dangerously low (<250 km)"}
   ],
+  "autonomy": {
+    "mode_thresholds": {
+      "safe_enter": 0.6,
+      "safe_exit": 0.5,
+      "guarded_enter": 0.3,
+      "guarded_exit": 0.2
+    },
+    "min_dwell_time_sec": 30,
+    "max_decisions_log": 100,
+    "objective_rules": [
+      {
+        "id": "power_recovery",
+        "name": "Power Recovery Mode",
+        "priority": 1,
+        "conditions": [{"parameter": "battery_soc", "operator": "lt", "threshold": 30}],
+        "action": "defer_payload",
+        "expected_outcome": "Battery SOC recovery above safe threshold",
+        "allowed_modes": ["AUTONOMOUS", "GUARDED", "SAFE"]
+      },
+      {
+        "id": "comm_recovery",
+        "name": "Communication Recovery",
+        "priority": 2,
+        "conditions": [{"parameter": "link_status", "operator": "neq", "threshold": "NOMINAL"}],
+        "action": "repoint_antenna",
+        "expected_outcome": "Re-establish nominal communication link",
+        "allowed_modes": ["AUTONOMOUS", "GUARDED", "SAFE"]
+      },
+      {
+        "id": "data_offload",
+        "name": "Data Offload Priority",
+        "priority": 3,
+        "conditions": [{"parameter": "storage_pct", "operator": "gt", "threshold": 90}],
+        "action": "prioritize_downlink",
+        "expected_outcome": "Storage utilization reduced below 90%",
+        "allowed_modes": ["AUTONOMOUS", "GUARDED"]
+      },
+      {
+        "id": "thermal_protection",
+        "name": "Thermal Protection",
+        "priority": 4,
+        "conditions": [{"parameter": "component_temp", "operator": "gt", "threshold": 75}],
+        "action": "reduce_solar_exposure",
+        "expected_outcome": "Component temperature within nominal range",
+        "allowed_modes": ["AUTONOMOUS", "GUARDED", "SAFE"]
+      },
+      {
+        "id": "target_tracking",
+        "name": "Target Tracking",
+        "priority": 5,
+        "conditions": [{"parameter": "has_upcoming_tasks", "operator": "eq", "threshold": true}],
+        "action": "slew_to_target",
+        "expected_outcome": "Satellite aligned for scheduled observation",
+        "allowed_modes": ["AUTONOMOUS"]
+      },
+      {
+        "id": "eclipse_conservation",
+        "name": "Eclipse Power Conservation",
+        "priority": 6,
+        "conditions": [{"parameter": "solar_current", "operator": "lt", "threshold": 0.2}],
+        "action": "reduce_nonessential_loads",
+        "expected_outcome": "Power budget maintained through eclipse period",
+        "allowed_modes": ["AUTONOMOUS", "GUARDED"]
+      },
+      {
+        "id": "nominal",
+        "name": "Nominal Orbit Maintenance",
+        "priority": 99,
+        "conditions": [],
+        "action": "maintain_nominal",
+        "expected_outcome": "Continue nominal operations",
+        "allowed_modes": ["AUTONOMOUS", "GUARDED", "SAFE"]
+      }
+    ],
+    "feasibility": {
+      "min_battery_soc_pct": 20,
+      "min_snr_db": 5,
+      "max_storage_pct": 95,
+      "max_slew_rate_deg_s": 1.0,
+      "min_contact_elevation_deg": 5,
+      "power_margin_factor": 1.2
+    },
+    "subsystem_coupling": {
+      "payload_power_w": 15,
+      "comms_power_w": 12,
+      "attitude_power_w": 6,
+      "heater_power_w": 5,
+      "base_load_w": 3
+    },
+    "confidence_levels": {
+      "high_threshold": 0.8,
+      "medium_threshold": 0.5
+    },
+    "prediction_horizon_sec": 600
+  },
   "ground_stations": [
     {"name": "ISTRAC Bangalore", "lat": 12.95, "lon": 77.70, "alt_m": 920, "min_elevation_deg": 5, "country": "India"},
     {"name": "ISTRAC Lucknow", "lat": 26.85, "lon": 80.95, "alt_m": 123, "min_elevation_deg": 5, "country": "India"},

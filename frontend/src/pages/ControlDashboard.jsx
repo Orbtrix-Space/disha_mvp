@@ -1,9 +1,12 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { History, Play, Pause, SkipBack } from 'lucide-react';
+import { History, Play } from 'lucide-react';
 import CesiumGlobe from '../components/CesiumGlobe';
 import GroundTrack2D from '../components/GroundTrack2D';
 import TelemetrySidebar from '../components/Telemetry';
-import ControlStrip from '../components/ControlStrip';
+import AutonomyPanel from '../components/AutonomyPanel';
+import PopupPanel from '../components/PopupPanel';
+import LayoutManager, { LayoutWidget } from '../components/LayoutManager';
+import { EventLog, CommandTerminal, PassCountdown } from '../components/ControlStrip';
 
 function TelemetryPlayback({ history, onSelectFrame }) {
   const [scrubIndex, setScrubIndex] = useState(null);
@@ -23,7 +26,7 @@ function TelemetryPlayback({ history, onSelectFrame }) {
     if (onSelectFrame) onSelectFrame(null);
   };
 
-  const elapsed = frameCount; // seconds of data
+  const elapsed = frameCount;
   const formatElapsed = (s) => {
     if (s < 60) return `${s}s`;
     return `${Math.floor(s / 60)}m ${s % 60}s`;
@@ -88,21 +91,27 @@ function DragHandle({ axis, onDrag, className }) {
   );
 }
 
+/* Default layout for the bottom strip grid (12-col, ~6 rows) */
+const STRIP_LAYOUT = [
+  { i: 'eventlog', x: 0, y: 0, w: 5, h: 6, minW: 3, minH: 4, maxH: 8 },
+  { i: 'terminal', x: 5, y: 0, w: 5, h: 6, minW: 3, minH: 4, maxH: 8 },
+  { i: 'contact',  x: 10, y: 0, w: 2, h: 6, minW: 2, minH: 4, maxH: 8 },
+];
+
 export default function ControlDashboard({ telemetry, alerts, contactState, bufferDump, clearBufferDump, telemetryHistory }) {
   const containerRef = useRef(null);
   const [globeW, setGlobeW] = useState(null);
-  const [sidebarW, setSidebarW] = useState(340);
-  const [stripH, setStripH] = useState(210);
-  const [groundNetworkVersion, setGroundNetworkVersion] = useState(0);
+  const [sidebarW, setSidebarW] = useState(null);
+  const [stripH, setStripH] = useState(null);
+  const [groundNetworkVersion] = useState(0);
   const [playbackFrame, setPlaybackFrame] = useState(null);
   const startRef = useRef({});
 
-  // Show playback frame if scrubbing, otherwise live telemetry
   const displayTelemetry = playbackFrame || telemetry;
 
   const onDragGlobe = useCallback((dx) => {
     if (startRef.current.globeW == null) {
-      const el = containerRef.current?.querySelector('.control-globe');
+      const el = containerRef.current?.querySelector('.control-globe-area');
       if (el) startRef.current.globeW = el.offsetWidth;
     }
     const base = startRef.current.globeW;
@@ -110,16 +119,22 @@ export default function ControlDashboard({ telemetry, alerts, contactState, buff
   }, []);
 
   const onDragSidebar = useCallback((dx) => {
-    if (startRef.current.sidebarW == null) startRef.current.sidebarW = sidebarW;
+    if (startRef.current.sidebarW == null) {
+      const el = containerRef.current?.querySelector('.control-sidebar');
+      if (el) startRef.current.sidebarW = el.offsetWidth;
+    }
     const base = startRef.current.sidebarW;
-    setSidebarW(Math.max(240, Math.min(600, base - dx)));
-  }, [sidebarW]);
+    if (base) setSidebarW(Math.max(220, Math.min(500, base - dx)));
+  }, []);
 
   const onDragStrip = useCallback((dy) => {
-    if (startRef.current.stripH == null) startRef.current.stripH = stripH;
+    if (startRef.current.stripH == null) {
+      const el = containerRef.current?.querySelector('.control-strip-area');
+      if (el) startRef.current.stripH = el.offsetHeight;
+    }
     const base = startRef.current.stripH;
-    setStripH(Math.max(120, Math.min(400, base - dy)));
-  }, [stripH]);
+    if (base) setStripH(Math.max(100, Math.min(400, base - dy)));
+  }, []);
 
   useEffect(() => {
     const reset = () => { startRef.current = {}; };
@@ -127,33 +142,81 @@ export default function ControlDashboard({ telemetry, alerts, contactState, buff
     return () => window.removeEventListener('mouseup', reset);
   }, []);
 
-  const controlStyle = {
-    gridTemplateColumns: `${globeW ? globeW + 'px' : '1.4fr'} 6px 1fr 6px ${sidebarW}px`,
-    gridTemplateRows: `1fr 6px ${stripH}px`,
-    gridTemplateAreas: `
-      "globe hg1 map hg2 sidebar"
-      "hrow  hrow hrow hrow sidebar"
-      "strip strip strip strip sidebar"
-    `,
-  };
+  const controlStyle = {};
+  if (globeW || sidebarW) {
+    const col1 = globeW ? `${globeW}px` : '39fr';
+    const col3 = sidebarW ? `${sidebarW}px` : '26fr';
+    controlStyle.gridTemplateColumns = `${col1} 6px 1fr 6px ${col3}`;
+    controlStyle.gridTemplateAreas = `
+      "globe hg1 center hg2 sidebar"
+      "hrow  hrow hrow  hrow hrow"
+      "strip strip strip strip strip"
+    `;
+  }
+  if (stripH) {
+    controlStyle.gridTemplateRows = `1fr 6px ${stripH}px`;
+  }
 
   return (
     <div className="dashboard-layout control-layout" ref={containerRef} style={controlStyle}>
-      <div className="control-globe" style={{ gridArea: 'globe' }}>
-        <CesiumGlobe telemetry={displayTelemetry} groundNetworkVersion={groundNetworkVersion} />
+      {/* Left — Globe + Map */}
+      <div className="control-globe-area" style={{ gridArea: 'globe' }}>
+        <div className="control-globe-inner pp-host">
+          <PopupPanel title="3D GLOBE">
+            <CesiumGlobe telemetry={displayTelemetry} groundNetworkVersion={groundNetworkVersion} />
+          </PopupPanel>
+          <CesiumGlobe telemetry={displayTelemetry} groundNetworkVersion={groundNetworkVersion} />
+        </div>
+        <div className="control-map-inner pp-host">
+          <PopupPanel title="2D GROUND TRACK">
+            <GroundTrack2D telemetry={displayTelemetry} groundNetworkVersion={groundNetworkVersion} />
+          </PopupPanel>
+          <GroundTrack2D telemetry={displayTelemetry} groundNetworkVersion={groundNetworkVersion} />
+        </div>
       </div>
-      <DragHandle axis="x" onDrag={onDragGlobe} className="hg1" />
-      <div className="control-map" style={{ gridArea: 'map' }}>
-        <GroundTrack2D telemetry={displayTelemetry} groundNetworkVersion={groundNetworkVersion} />
+
+      {(globeW || sidebarW) && <DragHandle axis="x" onDrag={onDragGlobe} className="hg1" />}
+
+      {/* Center — Autonomy Panel */}
+      <div className="control-center pp-host" style={{ gridArea: 'center' }}>
+        <PopupPanel title="AUTONOMY DECISIONS">
+          <AutonomyPanel telemetry={displayTelemetry} />
+        </PopupPanel>
+        <AutonomyPanel telemetry={displayTelemetry} />
       </div>
-      <DragHandle axis="x" onDrag={onDragSidebar} className="hg2" />
-      <div className="control-sidebar" style={{ gridArea: 'sidebar' }}>
+
+      {(globeW || sidebarW) && <DragHandle axis="x" onDrag={onDragSidebar} className="hg2" />}
+
+      {/* Right — Telemetry Sidebar */}
+      <div className="control-sidebar pp-host" style={{ gridArea: 'sidebar' }}>
+        <PopupPanel title="TELEMETRY">
+          <TelemetrySidebar telemetry={displayTelemetry} contactState={playbackFrame ? null : contactState} />
+        </PopupPanel>
         <TelemetrySidebar telemetry={displayTelemetry} contactState={playbackFrame ? null : contactState} />
         <TelemetryPlayback history={telemetryHistory || []} onSelectFrame={setPlaybackFrame} />
       </div>
+
       <DragHandle axis="y" onDrag={onDragStrip} className="hrow" />
+
+      {/* Bottom — Drag/Resize enabled strip */}
       <div className="control-strip-area" style={{ gridArea: 'strip' }}>
-        <ControlStrip alerts={alerts} contactState={contactState} bufferDump={bufferDump} clearBufferDump={clearBufferDump} />
+        <LayoutManager pageId="control-strip" defaultLayout={STRIP_LAYOUT} cols={12} rowHeight={28}>
+          <div key="eventlog">
+            <LayoutWidget title="EVENT LOG" noPad>
+              <EventLog alerts={alerts} contactState={contactState} bufferDump={bufferDump} clearBufferDump={clearBufferDump} />
+            </LayoutWidget>
+          </div>
+          <div key="terminal">
+            <LayoutWidget title="COMMAND TERMINAL" noPad>
+              <CommandTerminal />
+            </LayoutWidget>
+          </div>
+          <div key="contact">
+            <LayoutWidget title="GROUND CONTACT" noPad>
+              <PassCountdown contactState={contactState} />
+            </LayoutWidget>
+          </div>
+        </LayoutManager>
       </div>
     </div>
   );

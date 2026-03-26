@@ -110,6 +110,16 @@ export const api = {
     }
   },
 
+  getOrbitalElements: async () => {
+    try {
+      const response = await client.get('/flight/orbital-elements');
+      return response.data;
+    } catch (error) {
+      console.error("Orbital Elements Error:", error.message);
+      return null;
+    }
+  },
+
   getGroundStationPasses: async () => {
     try {
       const response = await client.get('/flight/passes');
@@ -231,6 +241,16 @@ export const api = {
     }
   },
 
+  getMargins: async () => {
+    try {
+      const response = await client.get('/intelligence/margins');
+      return response.data;
+    } catch (error) {
+      console.error("Margins Error:", error.message);
+      return null;
+    }
+  },
+
   getPowerProjection: async () => {
     try {
       const response = await client.get('/intelligence/power-projection');
@@ -247,6 +267,56 @@ export const api = {
       return response.data;
     } catch (error) {
       console.error("Decisions Error:", error.message);
+      return null;
+    }
+  },
+
+  getLatestDecisions: async (count = 10) => {
+    try {
+      const response = await client.get(`/intelligence/decisions/latest?count=${count}`);
+      return response.data;
+    } catch (error) {
+      console.error("Latest Decisions Error:", error.message);
+      return null;
+    }
+  },
+
+  getFeasibility: async () => {
+    try {
+      const response = await client.get('/intelligence/feasibility');
+      return response.data;
+    } catch (error) {
+      console.error("Feasibility Error:", error.message);
+      return null;
+    }
+  },
+
+  getCouplingEffects: async () => {
+    try {
+      const response = await client.get('/intelligence/coupling');
+      return response.data;
+    } catch (error) {
+      console.error("Coupling Error:", error.message);
+      return null;
+    }
+  },
+
+  setAutonomyOverride: async (mode, operator = 'OPERATOR', reason = 'Manual override') => {
+    try {
+      const response = await client.post('/intelligence/override', { mode, operator, reason });
+      return response.data;
+    } catch (error) {
+      console.error("Override Error:", error.message);
+      return null;
+    }
+  },
+
+  releaseAutonomyOverride: async (operator = 'OPERATOR') => {
+    try {
+      const response = await client.post(`/intelligence/override/release?operator=${operator}`);
+      return response.data;
+    } catch (error) {
+      console.error("Release Override Error:", error.message);
       return null;
     }
   },

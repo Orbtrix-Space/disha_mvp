@@ -92,7 +92,30 @@ async def telemetry_loop():
             # 4. Constraint + Autonomy (always runs)
             constraint_result = evaluate_constraints(raw_state)
             intelligence_cache["constraints"] = constraint_result
-            autonomy_result = autonomy_manager.evaluate(raw_state, constraint_result)
+
+            # Gather predictions for temporal awareness
+            predictions = {}
+            try:
+                from backend.core.power_module import project_power
+                power_proj = project_power(satellite)
+                predictions["time_to_next_eclipse_min"] = power_proj.get("time_to_next_eclipse_min", 999)
+            except Exception:
+                pass
+
+            # Gather upcoming approved tasks
+            upcoming_tasks = []
+            try:
+                for seq in command_engine.get_all_sequences():
+                    if seq.get("status") == "APPROVED":
+                        upcoming_tasks.extend(seq.get("commands", []))
+            except Exception:
+                pass
+
+            autonomy_result = autonomy_manager.evaluate(
+                raw_state, constraint_result,
+                upcoming_tasks=upcoming_tasks or None,
+                predictions=predictions or None,
+            )
             intelligence_cache["autonomy"] = autonomy_result
 
             if contact["in_contact"]:
