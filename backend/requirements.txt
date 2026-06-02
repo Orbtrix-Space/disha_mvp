@@ -6,3 +6,6 @@ sgp4>=2.22
 httpx>=0.25.0
 websockets>=12.0
 python-multipart>=0.0.6
+torch>=2.0.0
+
+openpyxl>=3.1.0

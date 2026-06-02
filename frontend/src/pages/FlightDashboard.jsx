@@ -832,37 +832,57 @@ function ManeuverPlanner() {
 }
 
 /* ═══════════════════════════════════════════════════
-   MAIN DASHBOARD
+   MAIN DASHBOARD — refactored Flight page
+   ───────────────────────────────────────────────────
+   Two-section sidebar (GPS + Tracking Data) on the left.
+   Fixed responsive grid on the right:
+     row 1: OD block (KV grid + sparkline + residuals plot)
+     row 2: Conjunction block (table + range plot + B-plane)
+     row 3: Maneuver | State vector | Power
+     row 4: Orbital elements | Visibility | Event timeline
+   No panel toggles; no RPO; no TLE loaders in the main window.
    ═══════════════════════════════════════════════════ */
-export default function FlightDashboard({ telemetry, onNetworkChange }) {
+import DashboardSidebar from '../components/DashboardSidebar';
+import PipelineStatusStrip from '../components/flight/PipelineStatusStrip';
+import { OdBlock, ConjunctionBlock, ManeuverBlock } from '../components/flight/PipelineOutputs';
+
+export default function FlightDashboard({ telemetry }) {
   return (
-    <div className="flt2-dashboard">
-      {/* LEFT — TLE + Ground Network */}
-      <div className="flt2-left">
-        <TLEQuickLoad />
-        <GroundNetwork onNetworkChange={onNetworkChange} />
-        <OrbitHealth telemetry={telemetry} />
-      </div>
+    <div className="ctrl-with-rail">
+      <DashboardSidebar flightMode />
+      <div className="flt-wrap">
+        <PipelineStatusStrip />
+        {/*
+          Layout = vertical flex stack of independent rows. Each row is
+          its own grid; rows CANNOT overlap each other regardless of
+          row content height. This is the explicit fix for the overlap
+          bug reported at 100% browser zoom.
+        */}
+        <div className="flt-stack">
+          {/* Row 1 — Orbit determination + LSQ fit graph (headline) */}
+          <div className="flt-row">
+            <div className="flt-cell"><OdBlock /></div>
+          </div>
 
-      {/* CENTER — Conjunction + RPO + Multi-Object */}
-      <div className="flt2-center">
-        <ConjunctionPanel />
-        <RPOPanel />
-        <MultiObjectTracking />
-      </div>
+          {/* Row 2 — Conjunction screening + range plot + B-plane */}
+          <div className="flt-row">
+            <div className="flt-cell"><ConjunctionBlock /></div>
+          </div>
 
-      {/* RIGHT — State Vector + Power + Visibility */}
-      <div className="flt2-right">
-        <StateVectorPanel telemetry={telemetry} />
-        <PowerPanel telemetry={telemetry} />
-        <VisibilitySummary telemetry={telemetry} />
-      </div>
+          {/* Row 3 — Maneuver / State vector / Power */}
+          <div className="flt-row flt-row-3">
+            <div className="flt-cell"><ManeuverBlock /></div>
+            <div className="flt-cell"><StateVectorPanel telemetry={telemetry} /></div>
+            <div className="flt-cell"><PowerPanel telemetry={telemetry} /></div>
+          </div>
 
-      {/* BOTTOM — Orbital Elements + Event Timeline + Maneuver Planner */}
-      <div className="flt2-bottom">
-        <OrbitalElements />
-        <EventTimeline telemetry={telemetry} />
-        <ManeuverPlanner />
+          {/* Row 4 — Orbital elements / Visibility / Event timeline */}
+          <div className="flt-row flt-row-3">
+            <div className="flt-cell"><OrbitalElements /></div>
+            <div className="flt-cell"><VisibilitySummary telemetry={telemetry} /></div>
+            <div className="flt-cell"><EventTimeline telemetry={telemetry} /></div>
+          </div>
+        </div>
       </div>
     </div>
   );

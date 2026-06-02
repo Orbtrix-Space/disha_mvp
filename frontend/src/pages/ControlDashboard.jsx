@@ -6,6 +6,11 @@ import TelemetrySidebar from '../components/Telemetry';
 import AutonomyPanel from '../components/AutonomyPanel';
 import PopupPanel from '../components/PopupPanel';
 import { EventLog, CommandTerminal, PassCountdown } from '../components/ControlStrip';
+import DashboardSidebar from '../components/DashboardSidebar';
+import { useDashboardVisibility } from '../hooks/useDashboardVisibility';
+import UploadModal from '../components/UploadModal';
+import TelecommandModal from '../components/tc/TelecommandModal';
+import PacketDefinitionsModal from '../components/tc/PacketDefinitionsModal';
 
 function TelemetryPlayback({ history, onSelectFrame }) {
   const [scrubIndex, setScrubIndex] = useState(null);
@@ -102,6 +107,11 @@ export default function ControlDashboard({ telemetry, alerts, contactState, buff
   const [groundNetworkVersion] = useState(0);
   const [playbackFrame, setPlaybackFrame] = useState(null);
   const startRef = useRef({});
+  const { visible, toggle, setAll, panelLabels } = useDashboardVisibility('control');
+  const [openOperation, setOpenOperation] = useState(null);
+
+  // True when either viz panel is on — keep the left grid cell rendered.
+  const showGlobeArea = visible.globe3d || visible.groundtrack2d;
 
   const displayTelemetry = playbackFrame || telemetry;
 
@@ -155,56 +165,92 @@ export default function ControlDashboard({ telemetry, alerts, contactState, buff
   }
 
   return (
-    <div className="dashboard-layout control-layout" ref={containerRef} style={controlStyle}>
-      {/* Left — Globe + Map stacked */}
-      <div className="control-globe-area" style={{ gridArea: 'globe' }}>
-        <div className="control-globe-inner pp-host">
-          <PopupPanel title="3D GLOBE">
-            <CesiumGlobe telemetry={displayTelemetry} groundNetworkVersion={groundNetworkVersion} />
-          </PopupPanel>
-          <CesiumGlobe telemetry={displayTelemetry} groundNetworkVersion={groundNetworkVersion} />
-        </div>
-        <div className="control-map-inner pp-host">
-          <PopupPanel title="2D GROUND TRACK">
-            <GroundTrack2D telemetry={displayTelemetry} groundNetworkVersion={groundNetworkVersion} />
-          </PopupPanel>
-          <GroundTrack2D telemetry={displayTelemetry} groundNetworkVersion={groundNetworkVersion} />
-        </div>
-      </div>
-
-      {(globeW || sidebarW) && <DragHandle axis="x" onDrag={onDragGlobe} className="hg1" />}
-
-      {/* Center — Autonomy Panel */}
-      <div className="control-center pp-host" style={{ gridArea: 'center' }}>
-        <PopupPanel title="AUTONOMY DECISIONS">
-          <AutonomyPanel telemetry={displayTelemetry} />
-        </PopupPanel>
-        <AutonomyPanel telemetry={displayTelemetry} />
-      </div>
-
-      {(globeW || sidebarW) && <DragHandle axis="x" onDrag={onDragSidebar} className="hg2" />}
-
-      {/* Right — Telemetry Sidebar */}
-      <div className="control-sidebar pp-host" style={{ gridArea: 'sidebar' }}>
-        <PopupPanel title="TELEMETRY">
-          <TelemetrySidebar telemetry={displayTelemetry} contactState={playbackFrame ? null : contactState} />
-        </PopupPanel>
-        <TelemetrySidebar telemetry={displayTelemetry} contactState={playbackFrame ? null : contactState} />
-        <TelemetryPlayback history={telemetryHistory || []} onSelectFrame={setPlaybackFrame} />
-      </div>
-
-      <DragHandle axis="y" onDrag={onDragStrip} className="hrow" />
-
-      {/* Bottom — Tabbed Log/Terminal + Ground Contact (always visible) */}
-      <div className="control-strip-area" style={{ gridArea: 'strip' }}>
-        <div className="ctrl-bottom-grid">
-          <TabbedBottomPanel alerts={alerts} contactState={contactState}
-            bufferDump={bufferDump} clearBufferDump={clearBufferDump} />
-          <div className="ctrl-ground-contact">
-            <PassCountdown contactState={contactState} />
+    <div className="ctrl-with-rail">
+      <DashboardSidebar
+        visible={visible}
+        toggle={toggle}
+        setAll={setAll}
+        panelLabels={panelLabels}
+        showOperations={true}
+        onOpenOperation={(op) => setOpenOperation(op)}
+      />
+      <div className="dashboard-layout control-layout" ref={containerRef} style={controlStyle}>
+        {/* Left — Globe + Map stacked (each gated independently) */}
+        {showGlobeArea && (
+          <div className="control-globe-area" style={{ gridArea: 'globe' }}>
+            {visible.globe3d && (
+              <div className="control-globe-inner pp-host">
+                <PopupPanel title="3D GLOBE">
+                  <CesiumGlobe telemetry={displayTelemetry} groundNetworkVersion={groundNetworkVersion} />
+                </PopupPanel>
+                <CesiumGlobe telemetry={displayTelemetry} groundNetworkVersion={groundNetworkVersion} />
+              </div>
+            )}
+            {visible.groundtrack2d && (
+              <div className="control-map-inner pp-host">
+                <PopupPanel title="2D GROUND TRACK">
+                  <GroundTrack2D telemetry={displayTelemetry} groundNetworkVersion={groundNetworkVersion} />
+                </PopupPanel>
+                <GroundTrack2D telemetry={displayTelemetry} groundNetworkVersion={groundNetworkVersion} />
+              </div>
+            )}
           </div>
-        </div>
+        )}
+
+        {(globeW || sidebarW) && <DragHandle axis="x" onDrag={onDragGlobe} className="hg1" />}
+
+        {/* Center — Autonomy Panel */}
+        {visible.autonomy && (
+          <div className="control-center pp-host" style={{ gridArea: 'center' }}>
+            <PopupPanel title="AUTONOMY DECISIONS">
+              <AutonomyPanel telemetry={displayTelemetry} />
+            </PopupPanel>
+            <AutonomyPanel telemetry={displayTelemetry} />
+          </div>
+        )}
+
+        {(globeW || sidebarW) && <DragHandle axis="x" onDrag={onDragSidebar} className="hg2" />}
+
+        {/* Right — Telemetry Sidebar */}
+        {visible.telemetry && (
+          <div className="control-sidebar pp-host" style={{ gridArea: 'sidebar' }}>
+            <PopupPanel title="TELEMETRY">
+              <TelemetrySidebar telemetry={displayTelemetry} contactState={playbackFrame ? null : contactState} />
+            </PopupPanel>
+            <TelemetrySidebar telemetry={displayTelemetry} contactState={playbackFrame ? null : contactState} />
+            <TelemetryPlayback history={telemetryHistory || []} onSelectFrame={setPlaybackFrame} />
+          </div>
+        )}
+
+        {visible.strip && <DragHandle axis="y" onDrag={onDragStrip} className="hrow" />}
+
+        {/* Bottom — Tabbed Log/Terminal + Ground Contact */}
+        {visible.strip && (
+          <div className="control-strip-area" style={{ gridArea: 'strip' }}>
+            <div className="ctrl-bottom-grid">
+              <TabbedBottomPanel alerts={alerts} contactState={contactState}
+                bufferDump={bufferDump} clearBufferDump={clearBufferDump} />
+              <div className="ctrl-ground-contact">
+                <PassCountdown contactState={contactState} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
+      {openOperation && openOperation.kind === 'telecommand_format' && (
+        <TelecommandModal onClose={() => setOpenOperation(null)} />
+      )}
+      {openOperation && openOperation.kind === 'packets' && (
+        <PacketDefinitionsModal onClose={() => setOpenOperation(null)} />
+      )}
+      {openOperation && !['telecommand_format', 'packets'].includes(openOperation.kind) && (
+        <UploadModal
+          kind={openOperation.kind}
+          label={openOperation.label}
+          onClose={() => setOpenOperation(null)}
+        />
+      )}
     </div>
   );
 }

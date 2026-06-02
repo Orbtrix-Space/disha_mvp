@@ -5,8 +5,8 @@ GET /orbit/prediction, GET /flight/orbital-elements, GET /flight/passes, GET /fl
 
 from datetime import timedelta
 from fastapi import APIRouter
-from backend.core.flight_dynamics import propagate_orbit, eci_to_ecef, ecef_to_lla, state_to_keplerian
-from backend.core.ground_stations import get_ground_stations, set_ground_stations, get_available_networks, get_active_network, add_custom_station, remove_station
+from backend.shared.dynamics.propagator import propagate_orbit, eci_to_ecef, ecef_to_lla, state_to_keplerian
+from backend.shared.ground.stations import get_ground_stations, set_ground_stations, get_available_networks, get_active_network, add_custom_station, remove_station
 
 router = APIRouter(tags=["Flight"])
 

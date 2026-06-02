@@ -74,16 +74,16 @@ export default function GroundTrack2D({ telemetry, groundNetworkVersion }) {
       maxZoom: 12,
     });
 
-    // Satellite imagery tiles (ArcGIS World Imagery - free, accurate colors)
+    // Dark, desaturated map tiles — CartoDB Dark Matter. The previous
+    // satellite imagery glowed on the pure-black UI canvas.
     tileLayerRef.current = L.tileLayer(
-      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-      { maxZoom: 19, attribution: 'Esri, Maxar, Earthstar Geographics' }
-    ).addTo(map);
-
-    // Country borders + labels overlay
-    L.tileLayer(
-      'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-      { maxZoom: 19, pane: 'overlayPane' }
+      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+      {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap contributors © CARTO',
+        subdomains: 'abcd',
+        className: 'map-tiles-dim',
+      }
     ).addTo(map);
 
     // Satellite marker (pulsing cyan dot)

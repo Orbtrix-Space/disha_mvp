@@ -5,6 +5,13 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 
+// Consistent number formatting so telemetry doesn't display as
+// `99.69666666666670%` or `498.47333333333336/500 Wh`.
+function fmtNum(v, digits = 1) {
+  if (v == null || Number.isNaN(v)) return '—';
+  return Number(v).toFixed(digits);
+}
+
 function ProgressBar({ value, colorClass }) {
   return (
     <div className="progress-bar-container">
@@ -272,18 +279,22 @@ export default function Telemetry({ telemetry, contactState }) {
           <div className="telem-card">
             <div className="telem-label">Battery</div>
             <div className={`telem-value ${batteryColor}`}>
-              {telemetry.battery_pct}<span className="telem-unit">%</span>
+              {fmtNum(telemetry.battery_pct, 1)}<span className="telem-unit">%</span>
             </div>
             <ProgressBar value={telemetry.battery_pct} colorClass={batteryColor} />
-            <div className="telem-detail-sub">{telemetry.battery_wh}/{telemetry.max_battery_wh} Wh</div>
+            <div className="telem-detail-sub">
+              {fmtNum(telemetry.battery_wh, 0)}/{fmtNum(telemetry.max_battery_wh, 0)} Wh
+            </div>
           </div>
           <div className="telem-card">
             <div className="telem-label">Storage</div>
             <div className="telem-value cyan">
-              {telemetry.storage_pct}<span className="telem-unit">%</span>
+              {fmtNum(telemetry.storage_pct, 1)}<span className="telem-unit">%</span>
             </div>
             <ProgressBar value={telemetry.storage_pct} colorClass="blue" />
-            <div className="telem-detail-sub">{telemetry.storage_used_gb}/{telemetry.max_storage_gb} GB</div>
+            <div className="telem-detail-sub">
+              {fmtNum(telemetry.storage_used_gb, 2)}/{fmtNum(telemetry.max_storage_gb, 0)} GB
+            </div>
           </div>
         </div>
       </div>
@@ -323,7 +334,7 @@ export default function Telemetry({ telemetry, contactState }) {
             <div className="telem-spark-top">
               <div>
                 <div className="telem-label">Solar</div>
-                <div className="telem-value yellow">{telemetry.solar_panel_current_a}<span className="telem-unit">A</span></div>
+                <div className="telem-value yellow">{fmtNum(telemetry.solar_panel_current_a, 2)}<span className="telem-unit">A</span></div>
               </div>
               <Sparkline data={historyRef.current.solar} color="#f59e0b" />
             </div>
@@ -332,7 +343,7 @@ export default function Telemetry({ telemetry, contactState }) {
             <div className="telem-spark-top">
               <div>
                 <div className="telem-label">SNR</div>
-                <div className="telem-value green">{telemetry.snr_db}<span className="telem-unit">dB</span></div>
+                <div className="telem-value green">{fmtNum(telemetry.snr_db, 1)}<span className="telem-unit">dB</span></div>
               </div>
               <Sparkline data={historyRef.current.snr} color="#5eead4"
                 thresholds={[{ value: 8, color: '#f59e0b' }, { value: 5, color: '#ef4444' }]} />

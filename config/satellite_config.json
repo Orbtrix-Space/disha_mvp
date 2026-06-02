@@ -165,7 +165,27 @@
       "high_threshold": 0.8,
       "medium_threshold": 0.5
     },
-    "prediction_horizon_sec": 600
+    "prediction_horizon_sec": 600,
+    "ai_monitor": {
+      "enabled": true,
+      "weight": 0.3,
+      "min_anomaly_for_escalation": 0.4,
+      "sequence_length": 60,
+      "zscore_flag_threshold": 2.5,
+      "anomaly_threshold_warning": 0.4,
+      "anomaly_threshold_critical": 0.7,
+      "weights_path": "backend/fdir/ai_weights",
+      "features": [
+        "battery_soc",
+        "battery_voltage",
+        "panel_temp",
+        "battery_temp",
+        "snr",
+        "pointing_error",
+        "storage_pct",
+        "solar_input_power"
+      ]
+    }
   },
   "ground_stations": [
     {"name": "ISTRAC Bangalore", "lat": 12.95, "lon": 77.70, "alt_m": 920, "min_elevation_deg": 5, "country": "India"},

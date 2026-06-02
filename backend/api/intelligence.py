@@ -6,7 +6,7 @@ Enhanced autonomy, constraints, margins, decisions, feasibility, and override en
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional
-from backend.core.power_module import project_power
+from backend.shared.power import project_power
 
 router = APIRouter(prefix="/intelligence", tags=["Intelligence"])
 
@@ -14,6 +14,11 @@ router = APIRouter(prefix="/intelligence", tags=["Intelligence"])
 def get_deps():
     from backend.main import satellite, autonomy_manager, intelligence_cache
     return satellite, autonomy_manager, intelligence_cache
+
+
+def get_ai_monitor():
+    from backend.main import ai_monitor
+    return ai_monitor
 
 
 # ─── Autonomy Status ──────────────────────────────────────────
@@ -106,6 +111,27 @@ def get_coupling_effects():
     return {
         "coupling_effects": status.get("coupling_effects", []),
         "count": len(status.get("coupling_effects", [])),
+    }
+
+
+# ─── AI Monitor ───────────────────────────────────────────────
+
+@router.get("/ai-monitor")
+def get_ai_monitor_status():
+    """Latest AI monitor result + diagnostics (param count, latency)."""
+    _, _, cache = get_deps()
+    monitor = get_ai_monitor()
+    result = cache.get("ai_monitor", {})
+    return {
+        "result": result,
+        "param_count": monitor.param_count,
+        "enabled": monitor.enabled,
+        "model_loaded": monitor.model_loaded,
+        "sequence_length": monitor.sequence_length,
+        "zscore_flag_threshold": monitor.zscore_flag_threshold,
+        "anomaly_threshold_warning": monitor.warning_threshold,
+        "anomaly_threshold_critical": monitor.critical_threshold,
+        "latency_stats": monitor.latency_stats(),
     }
 
 

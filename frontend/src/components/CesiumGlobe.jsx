@@ -38,6 +38,9 @@ export default function CesiumGlobe({ telemetry, groundNetworkVersion }) {
             color: Cesium.Color.fromCssColorString('#ff6b35'),
             outlineColor: Cesium.Color.fromCssColorString('#ff6b35').withAlpha(0.4),
             outlineWidth: 3,
+            // Hide pins on the far side of the globe so the front view
+            // stays readable.
+            heightReference: Cesium.HeightReference.NONE,
           },
           label: {
             text: gs.name,
@@ -47,9 +50,14 @@ export default function CesiumGlobe({ telemetry, groundNetworkVersion }) {
             verticalOrigin: Cesium.VerticalOrigin.TOP,
             pixelOffset: new Cesium.Cartesian2(0, 10),
             showBackground: true,
-            backgroundColor: Cesium.Color.BLACK.withAlpha(0.5),
+            backgroundColor: Cesium.Color.BLACK.withAlpha(0.65),
             backgroundPadding: new Cesium.Cartesian2(4, 3),
             scale: 0.9,
+            // Default: label hidden. We show only the active-contact
+            // station's label (plus SIM-SAT, which is the satellite
+            // entity itself, always labeled). This declutters the
+            // 6-station cluster on the globe.
+            show: false,
           },
         });
         stationEntitiesRef.current.push(entity);
@@ -95,14 +103,19 @@ export default function CesiumGlobe({ telemetry, groundNetworkVersion }) {
     // Crisp rendering — cap at 1.5x to avoid GPU overload
     viewer.resolutionScale = Math.min(window.devicePixelRatio || 1.0, 1.5);
 
-    // Add real Earth satellite imagery (ArcGIS World Imagery - free, high quality)
-    viewer.imageryLayers.addImageryProvider(
+    // Add Earth imagery — dimmed + desaturated so the globe doesn't
+    // glow on the pure-black canvas.
+    const imagery = viewer.imageryLayers.addImageryProvider(
       new Cesium.UrlTemplateImageryProvider({
         url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         maximumLevel: 19,
         credit: 'Esri, Maxar, Earthstar Geographics',
       })
     );
+    imagery.brightness = 0.55;     // pulls the bright blue marble down
+    imagery.contrast   = 0.95;
+    imagery.saturation = 0.45;     // desaturate vivid blues/greens
+    imagery.gamma      = 1.1;
 
     // === REALISTIC ECLIPSE: Enable sun-based lighting ===
     viewer.scene.globe.enableLighting = true;
@@ -111,18 +124,20 @@ export default function CesiumGlobe({ telemetry, groundNetworkVersion }) {
     viewer.clock.currentTime = Cesium.JulianDate.now();
     viewer.clock.multiplier = 1; // real-time
 
-    // Scene quality
+    // Scene — pure black canvas, near-black globe base
     viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#000000');
-    viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#0a101f');
+    viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#050505');
     viewer.scene.globe.showGroundAtmosphere = true;
 
-    // Atmosphere glow
-    viewer.scene.skyAtmosphere.brightnessShift = 0.0;
+    // Atmosphere — pulled way down so the halo doesn't bloom.
+    viewer.scene.skyAtmosphere.brightnessShift = -0.6;
     viewer.scene.skyAtmosphere.hueShift = 0.0;
-    viewer.scene.skyAtmosphere.saturationShift = 0.0;
+    viewer.scene.skyAtmosphere.saturationShift = -0.7;
+    viewer.scene.globe.atmosphereLightIntensity = 3.0;   // default 10
 
-    // Enable HDR for better lighting contrast
-    viewer.scene.highDynamicRange = true;
+    // HDR off — produces calmer, flatter lighting that reads less
+    // dramatically on the black UI canvas.
+    viewer.scene.highDynamicRange = false;
 
     // Enable sun and moon
     viewer.scene.sun = new Cesium.Sun();
@@ -274,6 +289,23 @@ export default function CesiumGlobe({ telemetry, groundNetworkVersion }) {
         new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(-30), altitude_km * 1000 * 3)
       );
     }
+
+    // Globe-label decluttering: show only the currently in-contact
+    // station's label (SIM-SAT label is already always-on as the
+    // satellite entity). Everything else stays as a pin only.
+    const activeName = (telemetry.contact_station || '').toLowerCase();
+    stationEntitiesRef.current.forEach((e) => {
+      if (!e.label) return;
+      const isActive = activeName && e.name && e.name.toLowerCase() === activeName;
+      e.label.show = isActive;
+      if (isActive && e.point) {
+        e.point.pixelSize = 9;
+        e.point.color = Cesium.Color.fromCssColorString('#5eead4');
+      } else if (e.point) {
+        e.point.pixelSize = 7;
+        e.point.color = Cesium.Color.fromCssColorString('#ff6b35');
+      }
+    });
   }, [telemetry, tracking]);
 
   // Fetch orbit prediction periodically

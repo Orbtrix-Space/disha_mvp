@@ -13,9 +13,10 @@
 import { useState, useEffect, useRef, useMemo, memo } from 'react';
 import {
   Brain, Target, Clock, XCircle, Shield, AlertTriangle,
-  ArrowRight, Lock, Camera, Activity, Battery, Wifi, Sun,
+  ArrowRight, Lock, Camera,
 } from 'lucide-react';
 import { api } from '../services/api';
+import TelemetryCharts from './TelemetryCharts';
 
 const MODE_COLORS = { AUTONOMOUS: '#5eead4', GUARDED: '#14b8a6', SAFE: '#ef4444' };
 const MODE_BG = {
@@ -308,130 +309,9 @@ const UpcomingTasks = memo(function UpcomingTasks() {
 });
 
 /* ══════════════════════════════════════════════════════════════
-   Section E — Telemetry Insights (compact sparkline trends)
+   Section E (replaced) — strip charts live in TelemetryCharts.jsx
+   The legacy InsightSparkline / TelemetryInsights have been removed.
    ══════════════════════════════════════════════════════════════ */
-const HISTORY_MAX = 90;
-
-function InsightSparkline({ data, color, width = '100%', height = 40, warn, crit }) {
-  if (!data || data.length < 2) {
-    return <div className="ti-spark-empty" style={{ height }} />;
-  }
-  const svgW = 200;
-  let min = Math.min(...data);
-  let max = Math.max(...data);
-  if (warn != null && warn < min) min = warn - 1;
-  if (crit != null && crit < min) min = crit - 1;
-  if (warn != null && warn > max) max = warn + 1;
-  if (crit != null && crit > max) max = crit + 1;
-  const range = max - min || 1;
-  const toY = (v) => height - 2 - ((v - min) / range) * (height - 4);
-
-  const points = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * svgW;
-    return `${x},${toY(v)}`;
-  }).join(' ');
-
-  // Gradient fill
-  const fillPoints = `0,${height} ${points} ${svgW},${height}`;
-
-  return (
-    <svg viewBox={`0 0 ${svgW} ${height}`} width={width} height={height} preserveAspectRatio="none" className="ti-spark-svg">
-      {/* Threshold lines */}
-      {warn != null && (
-        <line x1="0" y1={toY(warn)} x2={svgW} y2={toY(warn)}
-          stroke="#eab308" strokeWidth="0.8" strokeDasharray="4,4" opacity="0.4" />
-      )}
-      {crit != null && (
-        <line x1="0" y1={toY(crit)} x2={svgW} y2={toY(crit)}
-          stroke="#ef4444" strokeWidth="0.8" strokeDasharray="4,4" opacity="0.4" />
-      )}
-      {/* Fill area */}
-      <polygon points={fillPoints} fill={color} opacity="0.06" />
-      {/* Line */}
-      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5"
-        strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
-      {/* Current value dot */}
-      <circle cx={svgW} cy={toY(data[data.length - 1])} r="2.5" fill={color} />
-    </svg>
-  );
-}
-
-const TelemetryInsights = memo(function TelemetryInsights({ telemetry }) {
-  const histRef = useRef({ battery: [], snr: [], solar: [] });
-
-  useEffect(() => {
-    if (!telemetry) return;
-    const h = histRef.current;
-    const push = (arr, val) => { if (val == null) return; arr.push(val); if (arr.length > HISTORY_MAX) arr.shift(); };
-    push(h.battery, telemetry.battery_pct);
-    push(h.snr, telemetry.snr_db);
-    push(h.solar, telemetry.solar_panel_current_a);
-  }, [telemetry]);
-
-  if (!telemetry) return null;
-
-  const battColor = telemetry.battery_pct > 40 ? '#5eead4' : telemetry.battery_pct > 20 ? '#eab308' : '#ef4444';
-  const snrColor = telemetry.snr_db > 8 ? '#5eead4' : telemetry.snr_db > 5 ? '#eab308' : '#ef4444';
-
-  return (
-    <div className="ap-card ap-insights">
-      <div className="ap-card-header">
-        <Activity size={11} />
-        <span>TELEMETRY INSIGHTS</span>
-      </div>
-      <div className="ti-grid">
-        {/* Battery Trend */}
-        <div className="ti-panel">
-          <div className="ti-panel-top">
-            <div className="ti-panel-label"><Battery size={9} /> Battery</div>
-            <div className="ti-panel-value" style={{ color: battColor }}>
-              {telemetry.battery_pct}%
-            </div>
-          </div>
-          <InsightSparkline
-            data={histRef.current.battery}
-            color={battColor}
-            height={36}
-            warn={40}
-            crit={20}
-          />
-        </div>
-
-        {/* Link Quality / SNR */}
-        <div className="ti-panel">
-          <div className="ti-panel-top">
-            <div className="ti-panel-label"><Wifi size={9} /> SNR</div>
-            <div className="ti-panel-value" style={{ color: snrColor }}>
-              {telemetry.snr_db} dB
-            </div>
-          </div>
-          <InsightSparkline
-            data={histRef.current.snr}
-            color={snrColor}
-            height={36}
-            warn={8}
-            crit={5}
-          />
-        </div>
-
-        {/* Solar Current */}
-        <div className="ti-panel">
-          <div className="ti-panel-top">
-            <div className="ti-panel-label"><Sun size={9} /> Solar</div>
-            <div className="ti-panel-value" style={{ color: '#f59e0b' }}>
-              {telemetry.solar_panel_current_a} A
-            </div>
-          </div>
-          <InsightSparkline
-            data={histRef.current.solar}
-            color="#f59e0b"
-            height={36}
-          />
-        </div>
-      </div>
-    </div>
-  );
-});
 
 /* ══════════════════════════════════════════════════════════════
    Main Autonomy Panel
@@ -468,7 +348,7 @@ export default function AutonomyPanel({ telemetry }) {
   return (
     <div className="autonomy-panel">
       <AutonomyStatusCard autonomy={autonomy} constraints={constraints} />
-      <TelemetryInsights telemetry={telemetry} />
+      <TelemetryCharts telemetry={telemetry} />
       <NextActionTimeline autonomy={autonomy} />
       <RejectedActions autonomy={autonomy} />
       <UpcomingTasks />

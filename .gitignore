@@ -20,3 +20,11 @@ nul
 
 # Generated logs
 telemetry_logs/
+
+# AI training artifacts (large, regenerable)
+training_data/
+backend/fdir/ai_weights/*.pt
+backend/fdir/ai_weights/*.pkl
+
+# Operator uploads
+uploads/

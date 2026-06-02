@@ -5,10 +5,10 @@ POST /generate-plan, GET /power/prediction, GET /commands, POST /commands/{id}/a
 
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter
-from backend.models.schemas import ScheduleRequest, UserRequest
-from backend.core.flight_dynamics import check_feasibility
-from backend.core.mission_planner import generate_mission_plan, compute_feasibility, detect_conflicts
-from backend.core.power_module import predict_power
+from backend.shared.models.schemas import ScheduleRequest, UserRequest
+from backend.shared.dynamics.propagator import check_feasibility
+from backend.schedule.planner import generate_mission_plan, compute_feasibility, detect_conflicts
+from backend.shared.power import predict_power
 
 router = APIRouter(tags=["Planning"])
 
