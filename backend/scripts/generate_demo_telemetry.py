@@ -75,6 +75,35 @@ def low_pass(prev, target, alpha=0.05):
     return prev + alpha * (target - prev)
 
 
+def _scripted_soc(t_min: float) -> float:
+    """
+    Piecewise-linear SOC target keyed to the demo narrative. Final
+    output is low-pass filtered + noised so the trace looks organic.
+    Anchor points (min, %):
+        0  → 92    nominal cruise start
+        8  → 91    just before eclipse #1
+       15  → 84    after eclipse #1 (visible drop)
+       22  → 86    partial recovery in ground-pass sun
+       28  → 84    eclipse #2 begin
+       35  → 75    after eclipse #2 + thermal
+       42  → 65    after battery anomaly steeper discharge
+       48  → 63    bottom during NO_CONTACT critical
+       55  → 73    autonomy intervention starts recovery
+       60  → 82    recovery to nominal trend
+    """
+    anchors = [
+        (0,  92.0), (8,  91.0), (15, 84.0), (22, 86.0), (28, 84.0),
+        (35, 75.0), (42, 65.0), (48, 63.0), (55, 73.0), (60, 82.0),
+    ]
+    for i in range(len(anchors) - 1):
+        t0, v0 = anchors[i]
+        t1, v1 = anchors[i + 1]
+        if t0 <= t_min <= t1:
+            f = (t_min - t0) / max(1e-6, t1 - t0)
+            return v0 + (v1 - v0) * f
+    return anchors[-1][1]
+
+
 # ─── Channel definitions (used by telemetry + packet_definitions) ────
 
 CHANNELS = [
@@ -149,7 +178,10 @@ def generate_rows():
         sun = max(0.0, 1.0 - eclipse)
 
         # ── Solar power ───────────────────────────────────────────────
-        solar = 170.0 * sun + rng.gauss(0.0, 1.8)
+        # Sized so the hour-averaged net is slightly negative — gives the
+        # SOC trend its slow downward drift instead of hitting 100% within
+        # the first sunlight stretch.
+        solar = 130.0 * sun + rng.gauss(0.0, 1.6)
         solar = max(0.0, solar)
 
         # ── Payload state / power ─────────────────────────────────────
@@ -161,24 +193,28 @@ def generate_rows():
             payload_active = False   # safed by autonomy intervention
 
         payload_state = "ACTIVE" if payload_active else "IDLE"
-        payload_power = max(0.0, 12.0 + rng.gauss(0.0, 0.4)) if payload_active else 0.0
+        payload_power = max(0.0, 14.0 + rng.gauss(0.0, 0.4)) if payload_active else 0.0
 
         # ── EPS load ──────────────────────────────────────────────────
-        eps_load = 18.0 + payload_power + rng.gauss(0.0, 0.35)
-        # Anomaly window 35–42 — a stuck heater driving extra load
+        # Base bus draw (avionics + comms + heaters) sized so eclipse
+        # passes produce a visible SOC drop and the hour ends below
+        # start, matching the scripted narrative.
+        eps_load = 55.0 + payload_power + rng.gauss(0.0, 0.4)
+        # Anomaly window 35–42 — a stuck heater drives extra steady load
         if 35.0 <= t_min < 42.0:
-            eps_load += 3.5 * smoothstep(t_min, 35.0, 36.5)
+            eps_load += 28.0 * smoothstep(t_min, 35.0, 36.5)
 
-        # ── Power margin + SOC integration ────────────────────────────
+        # ── Power margin + scripted SOC trajectory ────────────────────
+        # The integral-based SOC was dominated by the charging side of
+        # the energy budget — the SOC stayed near 100 %, hiding the
+        # demo's story. We hand-shape the SOC curve to match the
+        # narrative (drops during each eclipse, steeper drop during the
+        # anomaly, recovery during ground passes) and add Gaussian
+        # noise so the trace still looks like real telemetry.
         power_margin = solar - eps_load
-        d_wh = (solar - eps_load) * (DT_SEC / 3600.0)
-        soc += (d_wh / CAPACITY_WH) * 100.0
-        # Extra discharge during the anomaly window
-        if 35.0 <= t_min < 42.0:
-            soc -= 0.045
-        # Critical: 42–48 NO_CONTACT, battery already low — slight extra drain
-        if 42.0 <= t_min < 48.0:
-            soc -= 0.025
+        soc_target = _scripted_soc(t_min)
+        soc = low_pass(soc, soc_target, alpha=0.18)
+        soc += rng.gauss(0.0, 0.12)
         soc = max(0.0, min(100.0, soc))
 
         # ── Battery voltage tracks SOC ────────────────────────────────

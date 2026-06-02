@@ -130,7 +130,7 @@ export default function RuleSankey({ nodes = [], links = [] }) {
         {/* Column headers */}
         {LAYERS.map((l, i) => (
           <text key={l} x={layout.colXs[i]} y={11}
-                fill="#7e7e87" fontFamily="JetBrains Mono, monospace"
+                fill="#7e7e87" fontFamily="Poppins, sans-serif"
                 fontSize="9" letterSpacing="0.06em">
             {LAYER_LABEL[l]}
           </text>
@@ -151,7 +151,7 @@ export default function RuleSankey({ nodes = [], links = [] }) {
                   fill={COLORS[n.layer]} fillOpacity="0.85" />
             <text x={n.x + NODE_W + 4} y={n.y + n.h / 2 + 3}
                   fill="#c8c8cc"
-                  fontFamily="JetBrains Mono, monospace" fontSize="9.5"
+                  fontFamily="Poppins, sans-serif" fontSize="9.5"
                   textRendering="optimizeLegibility">
               {n.id}
               <tspan fill="#7e7e87" dx="6"

@@ -44,7 +44,7 @@ export default function CesiumGlobe({ telemetry, groundNetworkVersion }) {
           },
           label: {
             text: gs.name,
-            font: '10px JetBrains Mono, monospace',
+            font: '10px Poppins, sans-serif',
             fillColor: Cesium.Color.fromCssColorString('#ff6b35'),
             style: Cesium.LabelStyle.FILL,
             verticalOrigin: Cesium.VerticalOrigin.TOP,
@@ -164,7 +164,7 @@ export default function CesiumGlobe({ telemetry, groundNetworkVersion }) {
       },
       label: {
         text: 'SIM-SAT',
-        font: '11px JetBrains Mono, monospace',
+        font: '11px Poppins, sans-serif',
         fillColor: Cesium.Color.fromCssColorString('#14b8a6'),
         style: Cesium.LabelStyle.FILL,
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,

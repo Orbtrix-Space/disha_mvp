@@ -33,7 +33,7 @@ export default function SubsystemHealthRadar({ health = {}, envelope = {}, highl
     return (
       <text x={x} y={y} dy={3} textAnchor={textAnchor}
             fill={isHi ? '#c8c8cc' : color}
-            fontFamily="JetBrains Mono, monospace"
+            fontFamily="Poppins, sans-serif"
             fontSize={isHi ? 10.5 : 9.5}
             fontWeight={isHi ? 600 : 400}>
         {payload.value}

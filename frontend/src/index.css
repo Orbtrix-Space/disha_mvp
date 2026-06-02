@@ -41,8 +41,11 @@
   --glow-green: none;
   --glow-red: none;
 
+  /* Single typeface across the whole app — Poppins for both the
+     conversational chrome AND the tabular numerics. tabular-nums on
+     .mono keeps columns aligned without needing a separate mono face. */
   --font-sans: 'Poppins', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+  --font-mono: 'Poppins', system-ui, -apple-system, sans-serif;
 
   --radius-sm: 6px;
   --radius-md: 10px;

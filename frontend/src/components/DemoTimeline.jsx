@@ -186,7 +186,7 @@ const containerStyle = {
   background: '#070707',
   border: '1px solid #222',
   borderRadius: 4,
-  fontFamily: 'JetBrains Mono, monospace',
+  fontFamily: 'Poppins, sans-serif',
   color: '#ccc',
   margin: '8px 0',
 };

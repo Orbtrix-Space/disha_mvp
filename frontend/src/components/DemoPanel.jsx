@@ -231,7 +231,7 @@ const panelStyle = {
   border: '1px solid #222',
   borderRadius: 4,
   color: '#ccc',
-  fontFamily: 'JetBrains Mono, monospace',
+  fontFamily: 'Poppins, sans-serif',
   zIndex: 100,
   boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
 };

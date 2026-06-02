@@ -93,7 +93,7 @@ export default function OrbitPlanesPlot({ tracks = [] }) {
               stroke="rgba(74, 111, 147, 0.5)" strokeWidth="0.6" />
         <text x={cx + 3} y={cy - earthR - 6}
               fill="rgba(74, 111, 147, 0.6)"
-              fontFamily="JetBrains Mono, monospace" fontSize="9">N</text>
+              fontFamily="Poppins, sans-serif" fontSize="9">N</text>
 
         {/* Orbits */}
         {projectedTracks.map((t) => {
@@ -113,7 +113,7 @@ export default function OrbitPlanesPlot({ tracks = [] }) {
                   <text x={t.points[t.points.length - 1].sx + 6}
                         y={t.points[t.points.length - 1].sy + 3}
                         fill={t.color}
-                        fontFamily="JetBrains Mono, monospace"
+                        fontFamily="Poppins, sans-serif"
                         fontSize="9.5">{t.sat_id}</text>
                 </>
               )}

@@ -150,7 +150,7 @@ export default function ConstellationGantt({
                   fill="rgba(255,255,255,0.015)"
                   stroke="rgba(255,255,255,0.04)" strokeWidth="0.5" />
             <text x={6} y={padT + i * laneH + laneH / 2 + 3}
-                  fill={SAT_COLORS[sat]} fontFamily="JetBrains Mono, monospace"
+                  fill={SAT_COLORS[sat]} fontFamily="Poppins, sans-serif"
                   fontSize="10.5">{sat}</text>
           </g>
         ))}
@@ -162,7 +162,7 @@ export default function ConstellationGantt({
                   y2={padT + plotH - 8}
                   stroke="rgba(255,255,255,0.04)" strokeWidth="0.5" />
             <text x={toX(t)} y={padT - 6} textAnchor="middle"
-                  fill="#7e7e87" fontFamily="JetBrains Mono, monospace"
+                  fill="#7e7e87" fontFamily="Poppins, sans-serif"
                   fontSize="9">{fmtTime(t)}</text>
           </g>
         ))}
@@ -174,7 +174,7 @@ export default function ConstellationGantt({
                   y2={padT + plotH - 8}
                   stroke="#5a7fa8" strokeWidth="1" strokeDasharray="3 3" />
             <text x={toX(now) + 4} y={padT + 8}
-                  fill="#5a7fa8" fontFamily="JetBrains Mono, monospace"
+                  fill="#5a7fa8" fontFamily="Poppins, sans-serif"
                   fontSize="9">NOW</text>
           </g>
         )}
@@ -198,7 +198,7 @@ export default function ConstellationGantt({
               {w > 36 && (
                 <text x={x + 4} y={y + h / 2 + 3}
                       fill="#d9d9de"
-                      fontFamily="JetBrains Mono, monospace" fontSize="9"
+                      fontFamily="Poppins, sans-serif" fontSize="9"
                       textRendering="optimizeLegibility">{p.request_id}</text>
               )}
               <title>
@@ -216,7 +216,7 @@ export default function ConstellationGantt({
                 x2={padL + plotW} y2={padT + plotH - 2}
                 stroke="rgba(255,255,255,0.08)" strokeWidth="0.5" />
           <text x={6} y={padT + plotH + 12}
-                fill="#b06560" fontFamily="JetBrains Mono, monospace"
+                fill="#b06560" fontFamily="Poppins, sans-serif"
                 fontSize="10.5">REJECTED</text>
           {rejected.map((r, i) => {
             // Lay rejected pills out evenly under the timeline

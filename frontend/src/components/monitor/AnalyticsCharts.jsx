@@ -31,14 +31,14 @@ export function RuleFiringHeatmap({ heatmap }) {
         {/* Bucket axis labels — show first/middle/last */}
         {[0, Math.floor(cols / 2), cols - 1].map((idx) => (
           <text key={idx} x={labelW + idx * 6 + 3} y={10}
-                fill="#7e7e87" fontFamily="JetBrains Mono, monospace" fontSize="8">
+                fill="#7e7e87" fontFamily="Poppins, sans-serif" fontSize="8">
             {labels[idx]?.slice(11, 16) || ''}
           </text>
         ))}
         {rules.map((r, ri) => (
           <g key={r.rule_id}>
             <text x={4} y={24 + ri * rowH + rowH / 2 + 3}
-                  fill="#c8c8cc" fontFamily="JetBrains Mono, monospace"
+                  fill="#c8c8cc" fontFamily="Poppins, sans-serif"
                   fontSize="9.5">{r.rule_id || '(unknown)'}</text>
             {r.counts.map((c, ci) => (
               <rect key={ci}
@@ -93,7 +93,7 @@ export function AnomalyTimeline({ events = [], minutes = 60 }) {
                   x2={8 + f * (box.w - 16)} y2={box.h / 2 + 4}
                   stroke="#3a3a44" strokeWidth="0.5" />
             <text x={8 + f * (box.w - 16)} y={box.h - 4} textAnchor="middle"
-                  fill="#7e7e87" fontFamily="JetBrains Mono, monospace" fontSize="8">
+                  fill="#7e7e87" fontFamily="Poppins, sans-serif" fontSize="8">
               {f === 0 ? `-${minutes}m` : f === 1 ? 'now' : ''}
             </text>
           </g>

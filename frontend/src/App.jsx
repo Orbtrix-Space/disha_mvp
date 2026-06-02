@@ -103,7 +103,7 @@ class ErrorBoundary extends Component {
     if (!this.state.error) return this.props.children;
     return (
       <div style={{
-        padding: 20, fontFamily: 'monospace', color: '#c4706c',
+        padding: 20, fontFamily: "'Poppins', sans-serif", color: '#c4706c',
         background: '#16161a', minHeight: '100vh',
         overflowY: 'auto',
       }}>
